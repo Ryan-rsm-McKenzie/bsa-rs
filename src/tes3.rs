@@ -9,6 +9,7 @@ use std::{
     cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
     collections::BTreeMap,
     io::{self, Read, Seek, SeekFrom, Write},
+    num::TryFromIntError,
 };
 
 #[non_exhaustive]
@@ -16,6 +17,9 @@ use std::{
 pub enum Error {
     #[error("invalid magic read from file header")]
     InvalidMagic(u32),
+
+    #[error(transparent)]
+    TruncationError(#[from] TryFromIntError),
 
     #[error(transparent)]
     Io(#[from] io::Error),
@@ -49,10 +53,10 @@ impl Header {
         let hashes = constants::HEADER_SIZE + self.hash_offset;
         let file_data = hashes + constants::HASH_SIZE * self.file_count;
         Offsets {
-            file_data,
             name_offsets,
             names,
             hashes,
+            file_data,
         }
     }
 }
@@ -69,12 +73,14 @@ pub mod hashing {
     }
 
     impl Hash {
+        #[must_use]
         pub fn new() -> Self {
-            Default::default()
+            Self::default()
         }
 
+        #[must_use]
         pub fn numeric(&self) -> u64 {
-            ((self.hi as u64) << (0 * 8)) | ((self.lo as u64) << (4 * 8))
+            u64::from(self.hi) | (u64::from(self.lo) << (4 * 8))
         }
     }
 
@@ -88,7 +94,7 @@ pub mod hashing {
 
     impl PartialOrd for Hash {
         fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            self.numeric().partial_cmp(&other.numeric())
+            Some(self.cmp(other))
         }
     }
 
@@ -104,6 +110,7 @@ pub mod hashing {
         }
     }
 
+    #[must_use]
     pub fn hash_file(path: &BStr) -> (Hash, BString) {
         let mut path = BString::new(path.to_vec());
         (hash_file_in_place(&mut path), path)
@@ -117,13 +124,13 @@ pub mod hashing {
 
         // rotate between first 4 bytes
         while i < midpoint {
-            h.lo ^= (path[i] as u32) << ((i % 4) * 8);
+            h.lo ^= u32::from(path[i]) << ((i % 4) * 8);
             i += 1;
         }
 
         // rotate between last 4 bytes
         while i < path.len() {
-            let rot = (path[i] as u32) << (((i - midpoint) % 4) * 8);
+            let rot = u32::from(path[i]) << (((i - midpoint) % 4) * 8);
             h.hi = u32::rotate_right(h.hi ^ rot, rot);
             i += 1;
         }
@@ -197,40 +204,48 @@ pub struct File<'a> {
 }
 
 impl<'a> File<'a> {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         self.bytes.as_bytes()
     }
 
+    #[must_use]
     pub fn as_ptr(&self) -> *const u8 {
         self.bytes.as_ptr()
     }
 
+    #[must_use]
     pub fn from_borrowed(data: &'a [u8]) -> Self {
         Self {
             bytes: ByteContainer::from_borrowed(data),
         }
     }
 
+    #[must_use]
     pub fn from_owned(data: Vec<u8>) -> Self {
         Self {
             bytes: ByteContainer::from_owned(data),
         }
     }
 
+    #[must_use]
     pub fn into_owned<'b>(self) -> File<'b> {
         File {
             bytes: self.bytes.into_owned(),
         }
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.bytes.is_empty()
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.bytes.len()
     }
@@ -270,7 +285,7 @@ impl Eq for Key {}
 
 impl PartialOrd for Key {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.hash.partial_cmp(&other.hash)
+        Some(self.cmp(other))
     }
 }
 
@@ -307,14 +322,17 @@ pub struct Archive<'a> {
 }
 
 impl<'a> Archive<'a> {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.files.len()
     }
@@ -385,23 +403,23 @@ impl<'a> Archive<'a> {
         R: Read + Seek,
     {
         let hash = source.save_restore_position(|source| -> Result<Hash> {
-            source.seek(SeekFrom::Start(
-                (offsets.hashes + constants::HASH_SIZE * idx) as u64,
-            ))?;
+            source.seek(SeekFrom::Start(u64::from(
+                offsets.hashes + constants::HASH_SIZE * idx,
+            )))?;
             Self::read_hash(source)
         })??;
 
         let name = source.save_restore_position(|source| -> Result<BString> {
-            source.seek(SeekFrom::Start((offsets.name_offsets + 0x4 * idx) as u64))?;
+            source.seek(SeekFrom::Start(u64::from(offsets.name_offsets + 0x4 * idx)))?;
             let offset = source.read::<u32>(Endian::Little)?;
-            source.seek(SeekFrom::Start((offsets.names + offset) as u64))?;
+            source.seek(SeekFrom::Start(u64::from(offsets.names + offset)))?;
             let name = source.read::<ZString>(Endian::Little)?;
             Ok(name)
         })??;
 
         let (size, offset) = source.read::<(u32, u32)>(Endian::Little)?;
         let data = source.save_restore_position(|source| -> Result<Vec<u8>> {
-            source.seek(SeekFrom::Start((offsets.file_data + offset) as u64))?;
+            source.seek(SeekFrom::Start(u64::from(offsets.file_data + offset)))?;
             let mut data = Vec::<u8>::new();
             data.resize_with(size as usize, Default::default);
             source.read_bytes(&mut data[..])?;
@@ -425,25 +443,24 @@ impl<'a> Archive<'a> {
         R: Read + Seek,
     {
         let (magic, hash_offset, file_count) = source.read::<(u32, u32, u32)>(Endian::Little)?;
-        if magic != constants::HEADER_MAGIC {
-            Err(Error::InvalidMagic(magic))
-        } else {
-            Ok(Header {
+        match magic {
+            constants::HEADER_MAGIC => Ok(Header {
                 hash_offset,
                 file_count,
-            })
+            }),
+            _ => Err(Error::InvalidMagic(magic)),
         }
     }
 
-    fn make_header(&self) -> Header {
-        Header {
-            file_count: self.files.len() as u32,
+    fn make_header(&self) -> Result<Header> {
+        Ok(Header {
+            file_count: self.files.len().try_into()?,
             hash_offset: {
                 let names_offset = 0xC * self.files.len();
                 let names_len: usize = self.files.keys().map(|x| x.name.len() + 1).sum();
-                (names_offset + names_len) as u32
+                (names_offset + names_len).try_into()?
             },
-        }
+        })
     }
 
     pub fn write<W>(&self, stream: &mut W) -> Result<()>
@@ -451,7 +468,7 @@ impl<'a> Archive<'a> {
         W: Write,
     {
         let mut sink = Sink::new(stream);
-        let header = self.make_header();
+        let header = self.make_header()?;
         Self::write_header(&mut sink, &header)?;
         self.write_files(&mut sink)?;
         self.write_name_offsets(&mut sink)?;
@@ -466,9 +483,9 @@ impl<'a> Archive<'a> {
     where
         W: Write,
     {
-        let mut offset: u32 = 0;
+        let mut offset = 0;
         for file in self.files.values() {
-            let size = file.bytes.len() as u32;
+            let size = file.bytes.len().try_into()?;
             sink.write::<(u32, u32)>(&(size, offset), Endian::Little)?;
             offset += size;
         }
@@ -518,10 +535,10 @@ impl<'a> Archive<'a> {
     where
         W: Write,
     {
-        let mut offset: u32 = 0;
+        let mut offset = 0;
         for key in self.files.keys() {
             sink.write::<u32>(&offset, Endian::Little)?;
-            offset += (key.name.len() + 1) as u32;
+            offset += u32::try_from(key.name.len() + 1)?;
         }
 
         Ok(())

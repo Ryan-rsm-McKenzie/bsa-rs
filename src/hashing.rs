@@ -2,27 +2,25 @@ use bstr::BString;
 
 const fn build_lookup_table() -> [u8; 256] {
     let mut table = [0u8; u8::MAX as usize + 1];
-    let mut i: usize = 0;
+    let mut i: u8 = 0;
     loop {
-        table[i] = i as u8;
-        if i >= u8::MAX as usize {
-            break;
-        } else {
-            i += 1;
-        }
+        table[i as usize] = i;
+        match i {
+            u8::MAX => break,
+            _ => i += 1,
+        };
     }
 
-    table['/' as usize] = '\\' as u8;
+    table['/' as usize] = b'\\';
 
-    let offset = 'a' as u8 - 'A' as u8;
-    let mut i = 'A' as usize;
+    let offset = b'a' - b'A';
+    let mut i = b'A';
     loop {
-        table[i] = (i as u8) + offset;
-        if i >= 'Z' as usize {
-            break;
-        } else {
-            i += 1;
-        }
+        table[i as usize] = i + offset;
+        match i {
+            b'Z' => break,
+            _ => i += 1,
+        };
     }
 
     table
@@ -38,17 +36,17 @@ pub fn normalize_path(path: &mut BString) {
         *b = map_byte(*b);
     }
 
-    while path.last().is_some_and(|x| *x == '\\' as u8) {
+    while path.last().is_some_and(|x| *x == b'\\') {
         path.pop();
     }
 
-    while path.first().is_some_and(|x| *x == '\\' as u8) {
+    while path.first().is_some_and(|x| *x == b'\\') {
         path.remove(0);
     }
 
     if path.is_empty() || path.len() >= 260 {
         path.clear();
-        path.push('\\' as u8);
+        path.push(b'\\');
     }
 }
 
