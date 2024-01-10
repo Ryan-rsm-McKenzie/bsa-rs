@@ -19,7 +19,7 @@ pub enum Error {
     InvalidMagic(u32),
 
     #[error(transparent)]
-    TruncationError(#[from] TryFromIntError),
+    IntegralTruncation(#[from] TryFromIntError),
 
     #[error(transparent)]
     Io(#[from] io::Error),
