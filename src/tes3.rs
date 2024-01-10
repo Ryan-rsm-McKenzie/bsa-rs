@@ -345,7 +345,7 @@ impl<'a> Archive<'a> {
         self.files.iter_mut()
     }
 
-    pub fn get<K>(&self, key: &K) -> Option<&'a File>
+    pub fn get<K>(&self, key: &K) -> Option<&File<'a>>
     where
         K: AsRef<Hash>,
     {
