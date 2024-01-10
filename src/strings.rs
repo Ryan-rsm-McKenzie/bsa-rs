@@ -2,7 +2,7 @@ use crate::io::BinaryStreamable;
 use bstr::BString;
 use std::io::{self, Read, Write};
 
-pub struct ZString {}
+pub struct ZString;
 
 impl BinaryStreamable for ZString {
     type Item = BString;

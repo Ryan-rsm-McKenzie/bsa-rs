@@ -411,13 +411,13 @@ impl<'a> Archive<'a> {
 
         let name = source.save_restore_position(|source| -> Result<BString> {
             source.seek(SeekFrom::Start(u64::from(offsets.name_offsets + 0x4 * idx)))?;
-            let offset = source.read::<u32>(Endian::Little)?;
+            let offset: u32 = source.read(Endian::Little)?;
             source.seek(SeekFrom::Start(u64::from(offsets.names + offset)))?;
-            let name = source.read::<ZString>(Endian::Little)?;
+            let name = source.read_protocol::<ZString>(Endian::Little)?;
             Ok(name)
         })??;
 
-        let (size, offset) = source.read::<(u32, u32)>(Endian::Little)?;
+        let (size, offset): (u32, u32) = source.read(Endian::Little)?;
         let data = source.save_restore_position(|source| -> Result<Vec<u8>> {
             source.seek(SeekFrom::Start(u64::from(offsets.file_data + offset)))?;
             let mut data = Vec::<u8>::new();
@@ -434,7 +434,7 @@ impl<'a> Archive<'a> {
     where
         R: Read + Seek,
     {
-        let (lo, hi) = source.read::<(u32, u32)>(Endian::Little)?;
+        let (lo, hi) = source.read(Endian::Little)?;
         Ok(Hash { lo, hi })
     }
 
@@ -442,7 +442,7 @@ impl<'a> Archive<'a> {
     where
         R: Read + Seek,
     {
-        let (magic, hash_offset, file_count) = source.read::<(u32, u32, u32)>(Endian::Little)?;
+        let (magic, hash_offset, file_count) = source.read(Endian::Little)?;
         match magic {
             constants::HEADER_MAGIC => Ok(Header {
                 hash_offset,
@@ -483,10 +483,10 @@ impl<'a> Archive<'a> {
     where
         W: Write,
     {
-        let mut offset = 0;
+        let mut offset: u32 = 0;
         for file in self.files.values() {
-            let size = file.bytes.len().try_into()?;
-            sink.write::<(u32, u32)>(&(size, offset), Endian::Little)?;
+            let size: u32 = file.bytes.len().try_into()?;
+            sink.write(&(size, offset), Endian::Little)?;
             offset += size;
         }
 
@@ -510,7 +510,7 @@ impl<'a> Archive<'a> {
     {
         for key in self.files.keys() {
             let hash = &key.hash;
-            sink.write::<(u32, u32)>(&(hash.lo, hash.hi), Endian::Little)?;
+            sink.write(&(hash.lo, hash.hi), Endian::Little)?;
         }
 
         Ok(())
@@ -520,7 +520,7 @@ impl<'a> Archive<'a> {
     where
         W: Write,
     {
-        sink.write::<(u32, u32, u32)>(
+        sink.write(
             &(
                 constants::HEADER_MAGIC,
                 header.hash_offset,
@@ -535,9 +535,9 @@ impl<'a> Archive<'a> {
     where
         W: Write,
     {
-        let mut offset = 0;
+        let mut offset: u32 = 0;
         for key in self.files.keys() {
-            sink.write::<u32>(&offset, Endian::Little)?;
+            sink.write(&offset, Endian::Little)?;
             offset += u32::try_from(key.name.len() + 1)?;
         }
 
@@ -549,7 +549,7 @@ impl<'a> Archive<'a> {
         W: Write,
     {
         for key in self.files.keys() {
-            sink.write::<ZString>(&key.name, Endian::Little)?;
+            sink.write_protocol::<ZString>(&key.name, Endian::Little)?;
         }
 
         Ok(())

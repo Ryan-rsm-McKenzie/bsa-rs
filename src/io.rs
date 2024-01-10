@@ -167,7 +167,14 @@ where
         Self { stream }
     }
 
-    pub fn read<T>(&mut self, endian: Endian) -> io::Result<T::Item>
+    pub fn read<T>(&mut self, endian: Endian) -> io::Result<T>
+    where
+        T: BinaryStreamable<Item = T>,
+    {
+        T::from_stream(&mut self.stream, endian)
+    }
+
+    pub fn read_protocol<T>(&mut self, endian: Endian) -> io::Result<T::Item>
     where
         T: BinaryStreamable,
     {
@@ -208,7 +215,14 @@ where
         Self { stream }
     }
 
-    pub fn write<T>(&mut self, item: &T::Item, endian: Endian) -> io::Result<()>
+    pub fn write<T>(&mut self, item: &T, endian: Endian) -> io::Result<()>
+    where
+        T: BinaryStreamable<Item = T>,
+    {
+        T::to_stream(&mut self.stream, item, endian)
+    }
+
+    pub fn write_protocol<T>(&mut self, item: &T::Item, endian: Endian) -> io::Result<()>
     where
         T: BinaryStreamable,
     {
