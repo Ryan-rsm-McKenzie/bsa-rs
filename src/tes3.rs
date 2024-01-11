@@ -199,11 +199,6 @@ pub struct File<'a> {
 
 impl<'a> File<'a> {
     #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         self.bytes.as_bytes()
     }
@@ -230,13 +225,9 @@ impl<'a> File<'a> {
         self.bytes.len()
     }
 
-    fn do_read<I>(stream: &mut I) -> Self
-    where
-        I: ?Sized + Source<'a>,
-    {
-        Self {
-            bytes: stream.read_to_end(),
-        }
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn write<O>(&self, stream: &mut O) -> Result<()>
@@ -245,6 +236,15 @@ impl<'a> File<'a> {
     {
         stream.write_all(self.as_bytes())?;
         Ok(())
+    }
+
+    fn do_read<I>(stream: &mut I) -> Self
+    where
+        I: ?Sized + Source<'a>,
+    {
+        Self {
+            bytes: stream.read_to_end(),
+        }
     }
 
     fn from_container(bytes: ByteContainer<'a>) -> Self {
@@ -342,19 +342,27 @@ pub struct Archive<'a> {
 }
 
 impl<'a> Archive<'a> {
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
+    pub fn clear(&mut self) {
+        self.files.clear();
+    }
+
+    pub fn get<K>(&self, key: &K) -> Option<&File<'a>>
+    where
+        K: Borrow<Hash>,
+    {
+        self.files.get(key.borrow())
+    }
+
+    pub fn insert<K>(&mut self, key: K, value: File<'a>) -> Option<File<'a>>
+    where
+        K: Into<Key>,
+    {
+        self.files.insert(key.into(), value)
     }
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()
-    }
-
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.files.len()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&Key, &File<'a>)> {
@@ -365,15 +373,14 @@ impl<'a> Archive<'a> {
         self.files.iter_mut()
     }
 
-    pub fn get<K>(&self, key: &K) -> Option<&File<'a>>
-    where
-        K: Borrow<Hash>,
-    {
-        self.files.get(key.borrow())
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.files.len()
     }
 
-    pub fn clear(&mut self) {
-        self.files.clear();
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn remove<K>(&mut self, key: &K) -> Option<File<'a>>
@@ -390,11 +397,20 @@ impl<'a> Archive<'a> {
         self.files.remove_entry(key.borrow())
     }
 
-    pub fn insert<K>(&mut self, key: K, value: File<'a>) -> Option<File<'a>>
+    pub fn write<O>(&self, stream: &mut O) -> Result<()>
     where
-        K: Into<Key>,
+        O: Write,
     {
-        self.files.insert(key.into(), value)
+        let mut sink = Sink::new(stream);
+        let header = self.make_header()?;
+        Self::write_header(&mut sink, &header)?;
+        self.write_files(&mut sink)?;
+        self.write_name_offsets(&mut sink)?;
+        self.write_names(&mut sink)?;
+        self.write_hashes(&mut sink)?;
+        self.write_file_data(&mut sink)?;
+
+        Ok(())
     }
 
     fn do_read<I>(source: &mut I) -> Result<Self>
@@ -476,22 +492,6 @@ impl<'a> Archive<'a> {
                 (names_offset + names_len).try_into()?
             },
         })
-    }
-
-    pub fn write<O>(&self, stream: &mut O) -> Result<()>
-    where
-        O: Write,
-    {
-        let mut sink = Sink::new(stream);
-        let header = self.make_header()?;
-        Self::write_header(&mut sink, &header)?;
-        self.write_files(&mut sink)?;
-        self.write_name_offsets(&mut sink)?;
-        self.write_names(&mut sink)?;
-        self.write_hashes(&mut sink)?;
-        self.write_file_data(&mut sink)?;
-
-        Ok(())
     }
 
     fn write_files<O>(&self, sink: &mut Sink<O>) -> Result<()>
