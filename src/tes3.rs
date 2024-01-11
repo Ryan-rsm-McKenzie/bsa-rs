@@ -106,12 +106,6 @@ pub mod hashing {
         }
     }
 
-    impl AsRef<Hash> for Hash {
-        fn as_ref(&self) -> &Hash {
-            self
-        }
-    }
-
     #[must_use]
     pub fn hash_file(path: &BStr) -> (Hash, BString) {
         let mut path = BString::new(path.to_vec());
@@ -342,12 +336,6 @@ impl From<BString> for Key {
     }
 }
 
-impl AsRef<Hash> for Key {
-    fn as_ref(&self) -> &Hash {
-        &self.hash
-    }
-}
-
 type FileMap<'a> = BTreeMap<Key, File<'a>>;
 
 #[derive(Default)]
@@ -381,9 +369,9 @@ impl<'a> Archive<'a> {
 
     pub fn get<K>(&self, key: &K) -> Option<&File<'a>>
     where
-        K: AsRef<Hash>,
+        K: Borrow<Hash>,
     {
-        self.files.get(key.as_ref())
+        self.files.get(key.borrow())
     }
 
     pub fn clear(&mut self) {
@@ -392,16 +380,16 @@ impl<'a> Archive<'a> {
 
     pub fn remove<K>(&mut self, key: &K) -> Option<File<'a>>
     where
-        K: AsRef<Hash>,
+        K: Borrow<Hash>,
     {
-        self.files.remove(key.as_ref())
+        self.files.remove(key.borrow())
     }
 
     pub fn remove_entry<K>(&mut self, key: &K) -> Option<(Key, File<'a>)>
     where
-        K: AsRef<Hash>,
+        K: Borrow<Hash>,
     {
-        self.files.remove_entry(key.as_ref())
+        self.files.remove_entry(key.borrow())
     }
 
     pub fn insert<K>(&mut self, key: K, value: File<'a>) -> Option<File<'a>>
