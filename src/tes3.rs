@@ -353,6 +353,20 @@ impl<'a> Archive<'a> {
         self.files.get(key.borrow())
     }
 
+    pub fn get_key_value<K>(&self, key: &K) -> Option<(&Key, &File<'a>)>
+    where
+        K: Borrow<Hash>,
+    {
+        self.files.get_key_value(key.borrow())
+    }
+
+    pub fn get_mut<K>(&mut self, key: &K) -> Option<&mut File<'a>>
+    where
+        K: Borrow<Hash>,
+    {
+        self.files.get_mut(key.borrow())
+    }
+
     pub fn insert<K>(&mut self, key: K, value: File<'a>) -> Option<File<'a>>
     where
         K: Into<Key>,
