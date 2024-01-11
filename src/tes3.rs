@@ -78,9 +78,10 @@ pub mod hashing {
             Self::default()
         }
 
+        #[allow(clippy::identity_op, clippy::erasing_op)]
         #[must_use]
         pub fn numeric(&self) -> u64 {
-            u64::from(self.hi) | (u64::from(self.lo) << (4 * 8))
+            (u64::from(self.hi) << (0 * 8)) | (u64::from(self.lo) << (4 * 8))
         }
     }
 
