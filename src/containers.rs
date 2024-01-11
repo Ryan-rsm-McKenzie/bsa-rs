@@ -1,63 +1,102 @@
-mod detail {
-    pub enum ByteContainer<'a> {
-        Owned(Vec<u8>),
-        Borrowed(&'a [u8]),
+use memmap2::Mmap;
+use std::sync::Arc;
+
+struct Mapping {
+    pos: usize,
+    len: usize,
+    mapping: Arc<Mmap>,
+}
+
+impl Mapping {
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.mapping[self.pos..self.pos + self.len]
+    }
+
+    pub fn as_ptr(&self) -> *const u8 {
+        self.as_bytes().as_ptr()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
     }
 }
 
-use detail::ByteContainer::*;
+enum ByteContainerInner<'a> {
+    Owned(Vec<u8>),
+    Borrowed(&'a [u8]),
+    Mapped(Mapping),
+}
+
+use ByteContainerInner::*;
 
 pub struct ByteContainer<'a> {
-    container: detail::ByteContainer<'a>,
+    inner: ByteContainerInner<'a>,
 }
 
 impl<'a> ByteContainer<'a> {
     pub fn as_bytes(&self) -> &[u8] {
-        match &self.container {
+        match &self.inner {
             Owned(x) => x,
             Borrowed(x) => x,
+            Mapped(x) => x.as_bytes(),
         }
     }
 
     pub fn as_ptr(&self) -> *const u8 {
-        match &self.container {
-            Owned(owner) => owner.as_ptr(),
-            Borrowed(view) => view.as_ptr(),
+        match &self.inner {
+            Owned(x) => x.as_ptr(),
+            Borrowed(x) => x.as_ptr(),
+            Mapped(x) => x.as_ptr(),
         }
     }
 
     pub fn from_borrowed(bytes: &'a [u8]) -> Self {
         Self {
-            container: Borrowed(bytes),
-        }
-    }
-
-    pub fn from_owned(bytes: Vec<u8>) -> Self {
-        Self {
-            container: Owned(bytes),
+            inner: Borrowed(bytes),
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        match &self.container {
+        match &self.inner {
             Owned(x) => x.is_empty(),
             Borrowed(x) => x.is_empty(),
+            Mapped(x) => x.is_empty(),
         }
     }
 
     pub fn len(&self) -> usize {
-        match &self.container {
+        match &self.inner {
             Owned(x) => x.len(),
             Borrowed(x) => x.len(),
+            Mapped(x) => x.len(),
         }
     }
 
-    pub fn into_owned<'b>(self) -> ByteContainer<'b> {
+    pub fn into_owned(self) -> ByteContainer<'static> {
         ByteContainer {
-            container: match self.container {
+            inner: match self.inner {
                 Owned(x) => Owned(x),
                 Borrowed(x) => Owned(x.to_owned()),
+                Mapped(x) => Mapped(x),
             },
+        }
+    }
+}
+
+impl ByteContainer<'static> {
+    pub fn from_owned(bytes: Vec<u8>) -> Self {
+        Self {
+            inner: Owned(bytes),
+        }
+    }
+
+    pub fn from_mapped(pos: usize, len: usize, mapping: Arc<Mmap>) -> Self {
+        Self {
+            inner: Mapped(Mapping { pos, len, mapping }),
         }
     }
 }
@@ -65,7 +104,7 @@ impl<'a> ByteContainer<'a> {
 impl<'a> Default for ByteContainer<'a> {
     fn default() -> Self {
         Self {
-            container: Owned(Vec::new()),
+            inner: Owned(Vec::new()),
         }
     }
 }

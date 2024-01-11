@@ -1,6 +1,11 @@
+use crate::containers::ByteContainer;
+use memmap2::{Mmap, MmapOptions};
 use std::{
-    io::{self, Read, Seek, SeekFrom, Write},
+    fs::File,
+    io::{self, Write},
     mem,
+    ops::Range,
+    sync::Arc,
 };
 
 pub enum Endian {
@@ -11,13 +16,168 @@ pub enum Endian {
     Native,
 }
 
+pub trait Source<'a> {
+    fn read_bytes(&mut self, buf: &mut [u8]) -> io::Result<()>;
+    fn read_container(&mut self, len: usize) -> io::Result<ByteContainer<'a>>;
+    fn read_to_end(&mut self) -> ByteContainer<'a>;
+    fn seek_absolute(&mut self, pos: usize) -> io::Result<()>;
+    fn stream_position(&self) -> usize;
+
+    fn read<T>(&mut self, endian: Endian) -> io::Result<T>
+    where
+        T: BinaryStreamable<Item = T>,
+    {
+        T::from_stream(self, endian)
+    }
+
+    fn read_protocol<T>(&mut self, endian: Endian) -> io::Result<T::Item>
+    where
+        T: BinaryStreamable,
+    {
+        T::from_stream(self, endian)
+    }
+
+    fn save_restore_position<F, T>(&mut self, f: F) -> io::Result<T>
+    where
+        F: FnOnce(&mut Self) -> T,
+    {
+        let position = self.stream_position();
+        let result = f(self);
+        self.seek_absolute(position)?;
+        Ok(result)
+    }
+}
+
+macro_rules! make_sourceable {
+    ($this:ty, $container_lifetime:lifetime $(,$this_lifetime:lifetime)?) => {
+        impl $(<$this_lifetime>)? Source<$container_lifetime> for $this {
+            fn read_bytes(&mut self, buf: &mut [u8]) -> io::Result<()> {
+                let len = buf.len();
+                let start = self.pos;
+                let stop = start + len;
+                if stop > self.source.len() {
+                    Err(io::Error::from(io::ErrorKind::UnexpectedEof))
+                } else {
+                    self.pos += len;
+                    buf.copy_from_slice(&self.source[start..stop]);
+                    Ok(())
+                }
+            }
+
+            fn read_container(&mut self, len: usize) -> io::Result<ByteContainer<$container_lifetime>> {
+                let start = self.pos;
+                let stop = start + len;
+                if stop > self.source.len() {
+                    Err(io::Error::from(io::ErrorKind::UnexpectedEof))
+                } else {
+                    self.pos += len;
+                    Ok(self.make_container(start..stop))
+                }
+            }
+
+			fn read_to_end(&mut self) -> ByteContainer<$container_lifetime> {
+				let len = self.source.len();
+				let start = self.pos;
+				let stop = len - start;
+				self.make_container(start..stop)
+			}
+
+            fn seek_absolute(&mut self, pos: usize) -> io::Result<()> {
+                if pos > self.source.len() {
+                    Err(io::Error::from(io::ErrorKind::UnexpectedEof))
+                } else {
+                    self.pos = pos;
+                    Ok(())
+                }
+            }
+
+            fn stream_position(&self) -> usize {
+                self.pos
+            }
+        }
+    };
+}
+
+pub struct BorrowedSource<'a> {
+    source: &'a [u8],
+    pos: usize,
+}
+
+impl<'a> BorrowedSource<'a> {
+    fn make_container(&self, range: Range<usize>) -> ByteContainer<'a> {
+        ByteContainer::from_borrowed(&self.source[range])
+    }
+}
+
+impl<'a> From<&'a [u8]> for BorrowedSource<'a> {
+    fn from(source: &'a [u8]) -> Self {
+        Self { source, pos: 0 }
+    }
+}
+
+make_sourceable!(BorrowedSource<'a>, 'a, 'a);
+
+pub struct CopiedSource<'a> {
+    source: &'a [u8],
+    pos: usize,
+}
+
+impl<'a> CopiedSource<'a> {
+    fn make_container(&self, range: Range<usize>) -> ByteContainer<'static> {
+        ByteContainer::from_owned(self.source[range].to_vec())
+    }
+}
+
+impl<'a> From<&'a [u8]> for CopiedSource<'a> {
+    fn from(source: &'a [u8]) -> Self {
+        Self { source, pos: 0 }
+    }
+}
+
+make_sourceable!(CopiedSource<'a>, 'static, 'a);
+
+pub struct MappedSource {
+    source: Arc<Mmap>,
+    pos: usize,
+}
+
+impl MappedSource {
+    fn make_container(&self, range: Range<usize>) -> ByteContainer<'static> {
+        ByteContainer::from_mapped(range.start, range.len(), self.source.clone())
+    }
+}
+
+impl TryFrom<File> for MappedSource {
+    type Error = io::Error;
+
+    fn try_from(value: File) -> Result<Self, Self::Error> {
+        let options = MmapOptions::new();
+        let mapping = unsafe { options.map(&value) }?;
+        Ok(Self {
+            source: Arc::new(mapping),
+            pos: 0,
+        })
+    }
+}
+
+make_sourceable!(MappedSource, 'static);
+
 pub trait BinaryStreamable {
     type Item;
 
-    fn from_be_stream<R: Read>(stream: &mut R) -> io::Result<Self::Item>;
-    fn from_le_stream<R: Read>(stream: &mut R) -> io::Result<Self::Item>;
-    fn from_ne_stream<R: Read>(stream: &mut R) -> io::Result<Self::Item>;
-    fn from_stream<R: Read>(stream: &mut R, endian: Endian) -> io::Result<Self::Item> {
+    fn from_be_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+    where
+        I: ?Sized + Source<'a>;
+    fn from_le_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+    where
+        I: ?Sized + Source<'a>;
+    fn from_ne_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+    where
+        I: ?Sized + Source<'a>;
+    fn from_stream<'a, I>(stream: &mut I, endian: Endian) -> io::Result<Self::Item>
+    where
+        I: ?Sized + Source<'a>,
+    {
         match endian {
             Endian::Big => Self::from_be_stream(stream),
             Endian::Little => Self::from_le_stream(stream),
@@ -25,12 +185,19 @@ pub trait BinaryStreamable {
         }
     }
 
-    fn to_be_stream<W: Write>(stream: &mut W, item: &Self::Item) -> io::Result<()>;
-    fn to_le_stream<W: Write>(stream: &mut W, item: &Self::Item) -> io::Result<()>;
-    fn to_ne_stream<W: Write>(stream: &mut W, item: &Self::Item) -> io::Result<()>;
-    fn to_stream<W: Write>(stream: &mut W, item: &Self::Item, endian: Endian) -> io::Result<()>
+    fn to_be_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+    where
+        O: ?Sized + Write;
+    fn to_le_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+    where
+        O: ?Sized + Write;
+    fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+    where
+        O: ?Sized + Write;
+    fn to_stream<O>(stream: &mut O, item: &Self::Item, endian: Endian) -> io::Result<()>
     where
         Self: Sized,
+        O: ?Sized + Write,
     {
         match endian {
             Endian::Big => Self::to_be_stream(stream, item),
@@ -45,35 +212,53 @@ macro_rules! make_binary_streamable {
         impl BinaryStreamable for $t {
             type Item = $t;
 
-            fn from_be_stream<R: Read>(stream: &mut R) -> io::Result<Self::Item> {
+            fn from_be_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+            where
+                I: ?Sized + Source<'a>,
+            {
                 let mut bytes = [0u8; mem::size_of::<Self::Item>()];
-                stream.read_exact(&mut bytes)?;
+                stream.read_bytes(&mut bytes)?;
                 Ok(Self::from_be_bytes(bytes))
             }
 
-            fn from_le_stream<R: Read>(stream: &mut R) -> io::Result<Self::Item> {
+            fn from_le_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+            where
+                I: ?Sized + Source<'a>,
+            {
                 let mut bytes = [0u8; mem::size_of::<Self::Item>()];
-                stream.read_exact(&mut bytes)?;
+                stream.read_bytes(&mut bytes)?;
                 Ok(Self::from_le_bytes(bytes))
             }
 
-            fn from_ne_stream<R: Read>(stream: &mut R) -> io::Result<Self::Item> {
+            fn from_ne_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+            where
+                I: ?Sized + Source<'a>,
+            {
                 let mut bytes = [0u8; mem::size_of::<Self::Item>()];
-                stream.read_exact(&mut bytes)?;
+                stream.read_bytes(&mut bytes)?;
                 Ok(Self::from_ne_bytes(bytes))
             }
 
-            fn to_be_stream<W: Write>(stream: &mut W, item: &Self::Item) -> io::Result<()> {
+            fn to_be_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+            where
+                O: ?Sized + Write,
+            {
                 let mut bytes = item.to_be_bytes();
                 stream.write_all(&mut bytes)
             }
 
-            fn to_le_stream<W: Write>(stream: &mut W, item: &Self::Item) -> io::Result<()> {
+            fn to_le_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+            where
+                O: ?Sized + Write,
+            {
                 let mut bytes = item.to_le_bytes();
                 stream.write_all(&mut bytes)
             }
 
-            fn to_ne_stream<W: Write>(stream: &mut W, item: &Self::Item) -> io::Result<()> {
+            fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+            where
+                O: ?Sized + Write,
+            {
                 let mut bytes = item.to_ne_bytes();
                 stream.write_all(&mut bytes)
             }
@@ -99,39 +284,57 @@ macro_rules! make_binary_streamable_tuple {
         {
             type Item = ($($t::Item,)+);
 
-            fn from_be_stream<R: Read>(stream: &mut R) -> io::Result<Self::Item> {
+            fn from_be_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+			where
+				I: ?Sized + Source<'a>,
+			{
                 Ok(($(
                     $t::from_be_stream(stream)?,
                 )+))
             }
 
-            fn from_le_stream<R: Read>(stream: &mut R) -> io::Result<Self::Item> {
+            fn from_le_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+			where
+				I: ?Sized + Source<'a>,
+			{
                 Ok(($(
                     $t::from_le_stream(stream)?,
                 )+))
             }
 
-            fn from_ne_stream<R: Read>(stream: &mut R) -> io::Result<Self::Item> {
+            fn from_ne_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+			where
+				I: ?Sized + Source<'a>,
+			{
                 Ok(($(
                     $t::from_ne_stream(stream)?,
                 )+))
             }
 
-            fn to_be_stream<W: Write>(stream: &mut W, item: &Self::Item) -> io::Result<()> {
+            fn to_be_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+			where
+				O: ?Sized + Write,
+			{
                 $(
                     $t::to_be_stream(stream, &item.$idx)?;
                 )+
                 Ok(())
             }
 
-            fn to_le_stream<W: Write>(stream: &mut W, item: &Self::Item) -> io::Result<()> {
+            fn to_le_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+			where
+				O: ?Sized + Write,
+			{
                 $(
                     $t::to_le_stream(stream, &item.$idx)?;
                 )+
                 Ok(())
             }
 
-            fn to_ne_stream<W: Write>(stream: &mut W, item: &Self::Item) -> io::Result<()> {
+            fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+			where
+				O: ?Sized + Write,
+			{
                 $(
                     $t::to_ne_stream(stream, &item.$idx)?;
                 )+
@@ -151,54 +354,6 @@ make_binary_streamable_tuple!(0 T0, 1 T1, 2 T2, 3 T3, 4 T4, 5 T5, 6 T6);
 make_binary_streamable_tuple!(0 T0, 1 T1, 2 T2, 3 T3, 4 T4, 5 T5, 6 T6, 7 T7);
 make_binary_streamable_tuple!(0 T0, 1 T1, 2 T2, 3 T3, 4 T4, 5 T5, 6 T6, 7 T7, 8 T8);
 make_binary_streamable_tuple!(0 T0, 1 T1, 2 T2, 3 T3, 4 T4, 5 T5, 6 T6, 7 T7, 8 T8, 9 T9);
-
-pub struct Source<'a, R>
-where
-    R: Read + Seek,
-{
-    stream: &'a mut R,
-}
-
-impl<'a, R> Source<'a, R>
-where
-    R: Read + Seek,
-{
-    pub fn new(stream: &'a mut R) -> Self {
-        Self { stream }
-    }
-
-    pub fn read<T>(&mut self, endian: Endian) -> io::Result<T>
-    where
-        T: BinaryStreamable<Item = T>,
-    {
-        T::from_stream(&mut self.stream, endian)
-    }
-
-    pub fn read_protocol<T>(&mut self, endian: Endian) -> io::Result<T::Item>
-    where
-        T: BinaryStreamable,
-    {
-        T::from_stream(&mut self.stream, endian)
-    }
-
-    pub fn read_bytes(&mut self, bytes: &mut [u8]) -> io::Result<()> {
-        self.stream.read_exact(bytes)
-    }
-
-    pub fn save_restore_position<F, T>(&mut self, f: F) -> io::Result<T>
-    where
-        F: FnOnce(&mut Self) -> T,
-    {
-        let position = self.stream.stream_position()?;
-        let result = f(self);
-        self.stream.seek(SeekFrom::Start(position))?;
-        Ok(result)
-    }
-
-    pub fn seek(&mut self, pos: SeekFrom) -> io::Result<()> {
-        self.stream.seek(pos).map(|_| ())
-    }
-}
 
 pub struct Sink<'a, R>
 where

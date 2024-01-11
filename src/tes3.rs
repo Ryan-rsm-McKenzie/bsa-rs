@@ -1,14 +1,16 @@
 use crate::{
     containers::ByteContainer,
-    io::{Endian, Sink, Source},
+    io::{BorrowedSource, CopiedSource, Endian, MappedSource, Sink, Source},
     strings::ZString,
+    Borrowed, Copied, Read,
 };
 use bstr::BString;
 use std::{
     borrow::Borrow,
     cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
     collections::BTreeMap,
-    io::{self, Read, Seek, SeekFrom, Write},
+    fs,
+    io::{self, Write},
     num::TryFromIntError,
 };
 
@@ -220,21 +222,7 @@ impl<'a> File<'a> {
     }
 
     #[must_use]
-    pub fn from_borrowed(data: &'a [u8]) -> Self {
-        Self {
-            bytes: ByteContainer::from_borrowed(data),
-        }
-    }
-
-    #[must_use]
-    pub fn from_owned(data: Vec<u8>) -> Self {
-        Self {
-            bytes: ByteContainer::from_owned(data),
-        }
-    }
-
-    #[must_use]
-    pub fn into_owned<'b>(self) -> File<'b> {
+    pub fn into_owned(self) -> File<'static> {
         File {
             bytes: self.bytes.into_owned(),
         }
@@ -250,22 +238,68 @@ impl<'a> File<'a> {
         self.bytes.len()
     }
 
-    pub fn read<R>(&mut self, stream: &mut R) -> Result<()>
+    fn do_read<I>(stream: &mut I) -> Self
     where
-        R: Read,
+        I: ?Sized + Source<'a>,
     {
-        let mut owner = Vec::<u8>::new();
-        stream.read_to_end(&mut owner)?;
-        self.bytes = ByteContainer::from_owned(owner);
-        Ok(())
+        Self {
+            bytes: stream.read_to_end(),
+        }
     }
 
-    pub fn write<W>(&self, stream: &mut W) -> Result<()>
+    pub fn write<O>(&self, stream: &mut O) -> Result<()>
     where
-        W: Write,
+        O: ?Sized + Write,
     {
         stream.write_all(self.as_bytes())?;
         Ok(())
+    }
+
+    fn from_container(bytes: ByteContainer<'a>) -> Self {
+        Self { bytes }
+    }
+}
+
+impl<'a> From<&'a [u8]> for File<'a> {
+    fn from(value: &'a [u8]) -> Self {
+        Self {
+            bytes: ByteContainer::from_borrowed(value),
+        }
+    }
+}
+
+impl From<Vec<u8>> for File<'static> {
+    fn from(value: Vec<u8>) -> Self {
+        Self {
+            bytes: ByteContainer::from_owned(value),
+        }
+    }
+}
+
+impl<'a> Read<Borrowed<'a>> for File<'a> {
+    type Error = Error;
+
+    fn read(source: Borrowed<'a>) -> Result<Self> {
+        let mut source = BorrowedSource::from(source.0);
+        Ok(Self::do_read(&mut source))
+    }
+}
+
+impl<'a> Read<Copied<'a>> for File<'static> {
+    type Error = Error;
+
+    fn read(source: Copied<'a>) -> Result<Self> {
+        let mut source = CopiedSource::from(source.0);
+        Ok(Self::do_read(&mut source))
+    }
+}
+
+impl Read<fs::File> for File<'static> {
+    type Error = Error;
+
+    fn read(source: fs::File) -> Result<Self> {
+        let mut source = MappedSource::try_from(source)?;
+        Ok(Self::do_read(&mut source))
     }
 }
 
@@ -377,70 +411,65 @@ impl<'a> Archive<'a> {
         self.files.insert(key.into(), value)
     }
 
-    pub fn read<R>(&mut self, stream: &mut R) -> Result<()>
+    fn do_read<I>(source: &mut I) -> Result<Self>
     where
-        R: Read + Seek,
+        I: ?Sized + Source<'a>,
     {
-        let mut source = Source::new(stream);
-        let header = Self::read_header(&mut source)?;
+        let header = Self::read_header(source)?;
         let offsets = header.compute_offsets();
-        self.files.clear();
+        let mut files = FileMap::default();
 
         for i in 0..header.file_count {
-            let (hash, name, file) = Self::read_file(&mut source, i, &offsets)?;
-            self.files.insert(Key { hash, name }, file);
+            let (hash, name, file) = Self::read_file(source, i, &offsets)?;
+            files.insert(Key { hash, name }, file);
         }
 
-        Ok(())
+        Ok(Self { files })
     }
 
-    fn read_file<R>(
-        source: &mut Source<R>,
+    fn read_file<I>(
+        source: &mut I,
         idx: u32,
         offsets: &Offsets,
     ) -> Result<(Hash, BString, File<'a>)>
     where
-        R: Read + Seek,
+        I: ?Sized + Source<'a>,
     {
         let hash = source.save_restore_position(|source| -> Result<Hash> {
-            source.seek(SeekFrom::Start(u64::from(
-                offsets.hashes + constants::HASH_SIZE * idx,
-            )))?;
+            source.seek_absolute((offsets.hashes + constants::HASH_SIZE * idx) as usize)?;
             Self::read_hash(source)
         })??;
 
         let name = source.save_restore_position(|source| -> Result<BString> {
-            source.seek(SeekFrom::Start(u64::from(offsets.name_offsets + 0x4 * idx)))?;
+            source.seek_absolute((offsets.name_offsets + 0x4 * idx) as usize)?;
             let offset: u32 = source.read(Endian::Little)?;
-            source.seek(SeekFrom::Start(u64::from(offsets.names + offset)))?;
+            source.seek_absolute((offsets.names + offset) as usize)?;
             let name = source.read_protocol::<ZString>(Endian::Little)?;
             Ok(name)
         })??;
 
         let (size, offset): (u32, u32) = source.read(Endian::Little)?;
-        let data = source.save_restore_position(|source| -> Result<Vec<u8>> {
-            source.seek(SeekFrom::Start(u64::from(offsets.file_data + offset)))?;
-            let mut data = Vec::<u8>::new();
-            data.resize_with(size as usize, Default::default);
-            source.read_bytes(&mut data[..])?;
-            Ok(data)
+        let data = source.save_restore_position(|source| -> Result<ByteContainer<'a>> {
+            source.seek_absolute((offsets.file_data + offset) as usize)?;
+            let result = source.read_container(size as usize)?;
+            Ok(result)
         })??;
 
-        let file = File::from_owned(data);
+        let file = File::from_container(data);
         Ok((hash, name, file))
     }
 
-    fn read_hash<R>(source: &mut Source<R>) -> Result<Hash>
+    fn read_hash<I>(source: &mut I) -> Result<Hash>
     where
-        R: Read + Seek,
+        I: ?Sized + Source<'a>,
     {
         let (lo, hi) = source.read(Endian::Little)?;
         Ok(Hash { lo, hi })
     }
 
-    fn read_header<R>(source: &mut Source<R>) -> Result<Header>
+    fn read_header<I>(source: &mut I) -> Result<Header>
     where
-        R: Read + Seek,
+        I: ?Sized + Source<'a>,
     {
         let (magic, hash_offset, file_count) = source.read(Endian::Little)?;
         match magic {
@@ -463,9 +492,9 @@ impl<'a> Archive<'a> {
         })
     }
 
-    pub fn write<W>(&self, stream: &mut W) -> Result<()>
+    pub fn write<O>(&self, stream: &mut O) -> Result<()>
     where
-        W: Write,
+        O: Write,
     {
         let mut sink = Sink::new(stream);
         let header = self.make_header()?;
@@ -479,9 +508,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_files<W>(&self, sink: &mut Sink<W>) -> Result<()>
+    fn write_files<O>(&self, sink: &mut Sink<O>) -> Result<()>
     where
-        W: Write,
+        O: Write,
     {
         let mut offset: u32 = 0;
         for file in self.files.values() {
@@ -493,9 +522,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_file_data<W>(&self, sink: &mut Sink<W>) -> Result<()>
+    fn write_file_data<O>(&self, sink: &mut Sink<O>) -> Result<()>
     where
-        W: Write,
+        O: Write,
     {
         for file in self.files.values() {
             sink.write_bytes(file.as_bytes())?;
@@ -504,9 +533,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_hashes<W>(&self, sink: &mut Sink<W>) -> Result<()>
+    fn write_hashes<O>(&self, sink: &mut Sink<O>) -> Result<()>
     where
-        W: Write,
+        O: Write,
     {
         for key in self.files.keys() {
             let hash = &key.hash;
@@ -516,9 +545,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_header<W>(sink: &mut Sink<W>, header: &Header) -> Result<()>
+    fn write_header<O>(sink: &mut Sink<O>, header: &Header) -> Result<()>
     where
-        W: Write,
+        O: Write,
     {
         sink.write(
             &(
@@ -531,9 +560,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_name_offsets<W>(&self, sink: &mut Sink<W>) -> Result<()>
+    fn write_name_offsets<O>(&self, sink: &mut Sink<O>) -> Result<()>
     where
-        W: Write,
+        O: Write,
     {
         let mut offset: u32 = 0;
         for key in self.files.keys() {
@@ -544,9 +573,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_names<W>(&self, sink: &mut Sink<W>) -> Result<()>
+    fn write_names<O>(&self, sink: &mut Sink<O>) -> Result<()>
     where
-        W: Write,
+        O: Write,
     {
         for key in self.files.keys() {
             sink.write_protocol::<ZString>(&key.name, Endian::Little)?;
@@ -583,13 +612,40 @@ impl<'a, 'b> IntoIterator for &'b mut Archive<'a> {
     }
 }
 
+impl<'a> Read<Borrowed<'a>> for Archive<'a> {
+    type Error = Error;
+
+    fn read(source: Borrowed<'a>) -> Result<Self> {
+        let mut source = BorrowedSource::from(source.0);
+        Self::do_read(&mut source)
+    }
+}
+
+impl<'a> Read<Copied<'a>> for Archive<'static> {
+    type Error = Error;
+
+    fn read(source: Copied<'a>) -> Result<Self> {
+        let mut source = CopiedSource::from(source.0);
+        Self::do_read(&mut source)
+    }
+}
+
+impl Read<fs::File> for Archive<'static> {
+    type Error = Error;
+
+    fn read(source: fs::File) -> Result<Self> {
+        let mut source = MappedSource::try_from(source)?;
+        Self::do_read(&mut source)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use anyhow::Context as _;
     use bstr::ByteSlice as _;
     use memmap2::Mmap;
-    use std::{ffi::OsStr, fs, io::Cursor, path::Path};
+    use std::{ffi::OsStr, fs, io::Read as _, path::Path};
     use walkdir::WalkDir;
 
     #[test]
@@ -611,11 +667,10 @@ mod tests {
 
     #[test]
     fn archive_invalid_magic() -> anyhow::Result<()> {
-        let mut archive = Archive::new();
         let path = Path::new("data/tes3_invalid_test/invalid_magic.bsa");
-        let mut stream =
+        let stream =
             fs::File::open(&path).with_context(|| format!("failed to open file: {path:?}"))?;
-        let read_result = archive.read(&mut stream);
+        let read_result = Archive::read(stream);
         let test = match read_result {
             Err(Error::InvalidMagic(0x200)) => true,
             _ => false,
@@ -629,14 +684,11 @@ mod tests {
     fn archive_read() -> anyhow::Result<()> {
         let root_path = Path::new("data/tes3_read_test/");
         let archive = {
-            let mut archive = Archive::new();
             let archive_path = root_path.join("test.bsa");
-            let mut stream = fs::File::open(&archive_path)
+            let stream = fs::File::open(&archive_path)
                 .with_context(|| format!("failed to open test archive: {archive_path:?}"))?;
-            archive
-                .read(&mut stream)
-                .with_context(|| format!("failed to read from archive: {archive_path:?}"))?;
-            archive
+            Archive::read(stream)
+                .with_context(|| format!("failed to read from archive: {archive_path:?}"))?
         };
 
         for file_path in WalkDir::new(root_path) {
@@ -719,7 +771,7 @@ mod tests {
         let stream = {
             let mut archive = Archive::new();
             for (data, info) in mmapped.iter().zip(&infos) {
-                let file = File::from_borrowed(&data[..]);
+                let file = File::from(&data[..]);
                 assert!(archive.insert(info.key.clone(), file).is_none());
             }
             let mut result = Vec::<u8>::new();
@@ -729,13 +781,8 @@ mod tests {
             result
         };
 
-        let archive = {
-            let mut result = Archive::new();
-            result
-                .read(&mut Cursor::new(stream))
-                .context("failed to read from archive in memory")?;
-            result
-        };
+        let archive =
+            Archive::read(Borrowed(&stream)).context("failed to read from archive in memory")?;
         for (data, info) in mmapped.iter().zip(&infos) {
             let file = archive.get(&info.key.hash).with_context(|| {
                 format!("failed to get value from archive with key: {:?}", info.path)
