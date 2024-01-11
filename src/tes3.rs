@@ -110,6 +110,7 @@ pub mod hashing {
         (hash_file_in_place(&mut path), path)
     }
 
+    #[must_use]
     pub fn hash_file_in_place(path: &mut BString) -> Hash {
         detail::normalize_path(path);
         let midpoint = path.len() / 2;
