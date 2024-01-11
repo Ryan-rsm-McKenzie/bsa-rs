@@ -36,11 +36,11 @@ pub fn normalize_path(path: &mut BString) {
         *b = map_byte(*b);
     }
 
-    while path.last().is_some_and(|x| *x == b'\\') {
+    while path.last().is_some_and(|&x| x == b'\\') {
         path.pop();
     }
 
-    while path.first().is_some_and(|x| *x == b'\\') {
+    while path.first().is_some_and(|&x| x == b'\\') {
         path.remove(0);
     }
 
