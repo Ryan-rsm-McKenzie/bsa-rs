@@ -629,176 +629,183 @@ impl Read<fs::File> for Archive<'static> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use anyhow::Context as _;
-    use bstr::ByteSlice as _;
-    use memmap2::Mmap;
-    use std::{ffi::OsStr, fs, io::Read as _, path::Path};
-    use walkdir::WalkDir;
+    mod file {
+        use super::super::*;
 
-    #[test]
-    fn file_default_state() -> anyhow::Result<()> {
-        let f = File::new();
-        assert!(f.is_empty());
-        assert!(f.len() == 0);
-        assert!(f.as_bytes().is_empty());
-        Ok(())
+        #[test]
+        fn default_state() -> anyhow::Result<()> {
+            let f = File::new();
+            assert!(f.is_empty());
+            assert!(f.len() == 0);
+            assert!(f.as_bytes().is_empty());
+            Ok(())
+        }
     }
 
-    #[test]
-    fn archive_default_state() -> anyhow::Result<()> {
-        let bsa = Archive::new();
-        assert!(bsa.is_empty());
-        assert!(bsa.len() == 0);
-        Ok(())
-    }
+    mod archive {
+        use super::super::*;
+        use anyhow::Context as _;
+        use bstr::ByteSlice as _;
+        use memmap2::Mmap;
+        use std::{ffi::OsStr, fs, io::Read as _, path::Path};
+        use walkdir::WalkDir;
 
-    #[test]
-    fn archive_invalid_magic() -> anyhow::Result<()> {
-        let path = Path::new("data/tes3_invalid_test/invalid_magic.bsa");
-        let stream =
-            fs::File::open(&path).with_context(|| format!("failed to open file: {path:?}"))?;
-        let read_result = Archive::read(stream);
-        let test = match read_result {
-            Err(Error::InvalidMagic(0x200)) => true,
-            _ => false,
-        };
-        assert!(test);
+        #[test]
+        fn default_state() -> anyhow::Result<()> {
+            let bsa = Archive::new();
+            assert!(bsa.is_empty());
+            assert!(bsa.len() == 0);
+            Ok(())
+        }
 
-        Ok(())
-    }
+        #[test]
+        fn invalid_magic() -> anyhow::Result<()> {
+            let path = Path::new("data/tes3_invalid_test/invalid_magic.bsa");
+            let stream =
+                fs::File::open(&path).with_context(|| format!("failed to open file: {path:?}"))?;
+            let read_result = Archive::read(stream);
+            let test = match read_result {
+                Err(Error::InvalidMagic(0x200)) => true,
+                _ => false,
+            };
+            assert!(test);
 
-    #[test]
-    fn archive_read() -> anyhow::Result<()> {
-        let root_path = Path::new("data/tes3_read_test/");
-        let archive = {
-            let archive_path = root_path.join("test.bsa");
-            let stream = fs::File::open(&archive_path)
-                .with_context(|| format!("failed to open test archive: {archive_path:?}"))?;
-            Archive::read(stream)
-                .with_context(|| format!("failed to read from archive: {archive_path:?}"))?
-        };
+            Ok(())
+        }
 
-        for file_path in WalkDir::new(root_path) {
-            if let Ok(file_path) = file_path {
-                let metadata = file_path
-                    .metadata()
-                    .context("failed to get file path metadata")?;
-                if metadata.is_file() && file_path.path().extension() != Some(OsStr::new("bsa")) {
-                    let key = file_path
-                        .path()
-                        .strip_prefix(root_path)
-                        .with_context(|| {
-                            format!(
+        #[test]
+        fn reading() -> anyhow::Result<()> {
+            let root_path = Path::new("data/tes3_read_test/");
+            let archive = {
+                let archive_path = root_path.join("test.bsa");
+                let stream = fs::File::open(&archive_path)
+                    .with_context(|| format!("failed to open test archive: {archive_path:?}"))?;
+                Archive::read(stream)
+                    .with_context(|| format!("failed to read from archive: {archive_path:?}"))?
+            };
+
+            for file_path in WalkDir::new(root_path) {
+                if let Ok(file_path) = file_path {
+                    let metadata = file_path
+                        .metadata()
+                        .context("failed to get file path metadata")?;
+                    if metadata.is_file() && file_path.path().extension() != Some(OsStr::new("bsa"))
+                    {
+                        let key = file_path
+                            .path()
+                            .strip_prefix(root_path)
+                            .with_context(|| {
+                                format!(
                                 "failed to strip prefix ({root_path:?}) from path ({file_path:?})"
                             )
-                        })?
-                        .as_os_str();
-                    let file_hash = hashing::hash_file(key.as_encoded_bytes().as_bstr()).0;
-                    let file = archive
-                        .get(&file_hash)
-                        .with_context(|| format!("failed to get file with key: {key:?}"))?;
-                    assert_eq!(file.len() as u64, metadata.len());
+                            })?
+                            .as_os_str();
+                        let file_hash = hashing::hash_file(key.as_encoded_bytes().as_bstr()).0;
+                        let file = archive
+                            .get(&file_hash)
+                            .with_context(|| format!("failed to get file with key: {key:?}"))?;
+                        assert_eq!(file.len() as u64, metadata.len());
 
-                    let mut original_data = Vec::new();
-                    fs::File::open(file_path.path())
-                        .with_context(|| format!("failed to open file: {file_path:?}"))?
-                        .read_to_end(&mut original_data)
-                        .with_context(|| format!("failed to read from file: {file_path:?}"))?;
-                    assert_eq!(file.as_bytes(), &original_data[..]);
+                        let mut original_data = Vec::new();
+                        fs::File::open(file_path.path())
+                            .with_context(|| format!("failed to open file: {file_path:?}"))?
+                            .read_to_end(&mut original_data)
+                            .with_context(|| format!("failed to read from file: {file_path:?}"))?;
+                        assert_eq!(file.as_bytes(), &original_data[..]);
+                    }
                 }
             }
+
+            Ok(())
         }
 
-        Ok(())
-    }
+        #[test]
+        fn writing() -> anyhow::Result<()> {
+            struct Info<'a> {
+                key: Key,
+                path: &'a Path,
+            }
 
-    #[test]
-    fn archive_write() -> anyhow::Result<()> {
-        struct Info<'a> {
-            key: Key,
-            path: &'a Path,
-        }
-
-        impl<'a> Info<'a> {
-            fn new(lo: u32, hi: u32, path: &'a str) -> Self {
-                let hash = Hash { lo, hi };
-                let key = Key::from(BString::from(path));
-                assert_eq!(hash, key.hash);
-                Self {
-                    key,
-                    path: Path::new(path),
+            impl<'a> Info<'a> {
+                fn new(lo: u32, hi: u32, path: &'a str) -> Self {
+                    let hash = Hash { lo, hi };
+                    let key = Key::from(BString::from(path));
+                    assert_eq!(hash, key.hash);
+                    Self {
+                        key,
+                        path: Path::new(path),
+                    }
                 }
             }
-        }
 
-        let infos = [
-            Info::new(0x0C18356B, 0xA578DB74, "Tiles/tile_0001.png"),
-            Info::new(0x1B0D3416, 0xF5D5F30E, "Share/License.txt"),
-            Info::new(0x1B3B140A, 0x07B36E53, "Background/background_middle.png"),
-            Info::new(0x29505413, 0x1EB4CED7, "Construct 3/Pixel Platformer.c3p"),
-            Info::new(0x4B7D031B, 0xD4701AD4, "Tilemap/characters_packed.png"),
-            Info::new(0x74491918, 0x2BEBCD0A, "Characters/character_0001.png"),
-        ];
+            let infos = [
+                Info::new(0x0C18356B, 0xA578DB74, "Tiles/tile_0001.png"),
+                Info::new(0x1B0D3416, 0xF5D5F30E, "Share/License.txt"),
+                Info::new(0x1B3B140A, 0x07B36E53, "Background/background_middle.png"),
+                Info::new(0x29505413, 0x1EB4CED7, "Construct 3/Pixel Platformer.c3p"),
+                Info::new(0x4B7D031B, 0xD4701AD4, "Tilemap/characters_packed.png"),
+                Info::new(0x74491918, 0x2BEBCD0A, "Characters/character_0001.png"),
+            ];
 
-        let mmapped = {
-            let mut result = Vec::<Mmap>::new();
-            for info in &infos {
-                let file_path = Path::new("data/tes3_write_test/data").join(info.path);
-                let fd = fs::File::open(file_path.clone())
-                    .with_context(|| format!("failed to open file: {file_path:?}"))?;
-                let file = unsafe {
-                    Mmap::map(&fd)
-                        .with_context(|| format!("failed to memory map file: {file_path:?}"))?
-                };
-                result.push(file);
-            }
-            result
-        };
+            let mmapped = {
+                let mut result = Vec::<Mmap>::new();
+                for info in &infos {
+                    let file_path = Path::new("data/tes3_write_test/data").join(info.path);
+                    let fd = fs::File::open(file_path.clone())
+                        .with_context(|| format!("failed to open file: {file_path:?}"))?;
+                    let file = unsafe {
+                        Mmap::map(&fd)
+                            .with_context(|| format!("failed to memory map file: {file_path:?}"))?
+                    };
+                    result.push(file);
+                }
+                result
+            };
 
-        let stream = {
-            let mut archive = Archive::new();
+            let stream = {
+                let mut archive = Archive::new();
+                for (data, info) in mmapped.iter().zip(&infos) {
+                    let file = File::from(&data[..]);
+                    assert!(archive.insert(info.key.clone(), file).is_none());
+                }
+                let mut result = Vec::<u8>::new();
+                archive
+                    .write(&mut result)
+                    .context("failed to write test archive to memory")?;
+                result
+            };
+
+            let archive = Archive::read(Borrowed(&stream))
+                .context("failed to read from archive in memory")?;
             for (data, info) in mmapped.iter().zip(&infos) {
-                let file = File::from(&data[..]);
-                assert!(archive.insert(info.key.clone(), file).is_none());
+                let file = archive.get(&info.key.hash).with_context(|| {
+                    format!("failed to get value from archive with key: {:?}", info.path)
+                })?;
+                assert_eq!(file.as_bytes(), &data[..]);
             }
-            let mut result = Vec::<u8>::new();
-            archive
-                .write(&mut result)
-                .context("failed to write test archive to memory")?;
-            result
-        };
 
-        let archive =
-            Archive::read(Borrowed(&stream)).context("failed to read from archive in memory")?;
-        for (data, info) in mmapped.iter().zip(&infos) {
-            let file = archive.get(&info.key.hash).with_context(|| {
-                format!("failed to get value from archive with key: {:?}", info.path)
-            })?;
-            assert_eq!(file.as_bytes(), &data[..]);
+            Ok(())
         }
 
-        Ok(())
-    }
+        #[test]
+        fn assert_generic_interfaces_compile() -> anyhow::Result<()> {
+            let mut bsa = Archive::default();
+            let key = Key::default();
+            let hash = Hash::default();
 
-    #[test]
-    fn archive_assert_generic_interfaces_compile() -> anyhow::Result<()> {
-        let mut bsa = Archive::default();
-        let key = Key::default();
-        let hash = Hash::default();
+            _ = bsa.get(&key);
+            _ = bsa.get(&hash);
 
-        _ = bsa.get(&key);
-        _ = bsa.get(&hash);
+            _ = bsa.remove(&key);
+            _ = bsa.remove(&hash);
 
-        _ = bsa.remove(&key);
-        _ = bsa.remove(&hash);
+            _ = bsa.remove_entry(&key);
+            _ = bsa.remove_entry(&hash);
 
-        _ = bsa.remove_entry(&key);
-        _ = bsa.remove_entry(&hash);
+            _ = bsa.insert(key, Default::default());
+            _ = bsa.insert(BString::default(), Default::default());
 
-        _ = bsa.insert(key, Default::default());
-        _ = bsa.insert(BString::default(), Default::default());
-
-        Ok(())
+            Ok(())
+        }
     }
 }
