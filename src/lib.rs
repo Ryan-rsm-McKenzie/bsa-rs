@@ -6,6 +6,7 @@ mod hashing;
 mod io;
 mod strings;
 pub mod tes3;
+pub mod tes4;
 
 pub struct Borrowed<'a>(pub &'a [u8]);
 
