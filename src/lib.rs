@@ -1,4 +1,4 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::std_instead_of_core)]
 #![allow(clippy::enum_glob_use, clippy::missing_errors_doc)]
 
 mod containers;
@@ -17,7 +17,7 @@ where
 {
     type Error;
 
-    fn read(source: T) -> std::result::Result<Self, Self::Error>;
+    fn read(source: T) -> core::result::Result<Self, Self::Error>;
 }
 
 pub use bstr::{BStr, BString};

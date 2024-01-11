@@ -5,13 +5,11 @@ use crate::{
     Borrowed, Copied, Read,
 };
 use bstr::BString;
+use core::{borrow::Borrow, cmp::Ordering, num::TryFromIntError};
 use std::{
-    borrow::Borrow,
-    cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
     collections::BTreeMap,
     fs,
     io::{self, Write},
-    num::TryFromIntError,
 };
 
 #[non_exhaustive]
@@ -27,7 +25,7 @@ pub enum Error {
     Io(#[from] io::Error),
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = core::result::Result<T, Error>;
 
 mod constants {
     pub const FILE_ENTRY_SIZE: u32 = 0x8;
@@ -66,7 +64,7 @@ impl Header {
 pub mod hashing {
     use crate::hashing as detail;
     use bstr::{BStr, BString};
-    use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
+    use core::cmp::Ordering;
 
     #[derive(Clone, Copy, Debug, Default)]
     pub struct Hash {

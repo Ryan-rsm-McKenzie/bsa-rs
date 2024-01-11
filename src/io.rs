@@ -1,10 +1,9 @@
 use crate::containers::ByteContainer;
+use core::{mem, ops::Range};
 use memmap2::{Mmap, MmapOptions};
 use std::{
     fs::File,
     io::{self, Write},
-    mem,
-    ops::Range,
     sync::Arc,
 };
 
