@@ -674,6 +674,21 @@ mod tests {
         }
 
         #[test]
+        fn invalid_out_of_bounds() -> anyhow::Result<()> {
+            let path = Path::new("data/tes3_invalid_test/invalid_exhausted.bsa");
+            let stream =
+                fs::File::open(&path).with_context(|| format!("failed to open file: {path:?}"))?;
+            let read_result = Archive::read(stream);
+            let test = match read_result {
+                Err(Error::Io(io)) if io.kind() == io::ErrorKind::UnexpectedEof => true,
+                _ => false,
+            };
+            assert!(test);
+
+            Ok(())
+        }
+
+        #[test]
         fn reading() -> anyhow::Result<()> {
             let root_path = Path::new("data/tes3_read_test/");
             let archive = {
