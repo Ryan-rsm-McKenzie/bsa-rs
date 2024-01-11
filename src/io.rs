@@ -17,9 +17,15 @@ pub enum Endian {
 
 pub trait Source<'a> {
     fn read_bytes(&mut self, buf: &mut [u8]) -> io::Result<()>;
+
     fn read_container(&mut self, len: usize) -> io::Result<ByteContainer<'a>>;
+
+    #[must_use]
     fn read_to_end(&mut self) -> ByteContainer<'a>;
+
     fn seek_absolute(&mut self, pos: usize) -> io::Result<()>;
+
+    #[must_use]
     fn stream_position(&self) -> usize;
 
     fn read<T>(&mut self, endian: Endian) -> io::Result<T>
@@ -167,12 +173,15 @@ pub trait BinaryStreamable {
     fn from_be_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
     where
         I: ?Sized + Source<'a>;
+
     fn from_le_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
     where
         I: ?Sized + Source<'a>;
+
     fn from_ne_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
     where
         I: ?Sized + Source<'a>;
+
     fn from_stream<'a, I>(stream: &mut I, endian: Endian) -> io::Result<Self::Item>
     where
         I: ?Sized + Source<'a>,
@@ -187,12 +196,15 @@ pub trait BinaryStreamable {
     fn to_be_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
     where
         O: ?Sized + Write;
+
     fn to_le_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
     where
         O: ?Sized + Write;
+
     fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
     where
         O: ?Sized + Write;
+
     fn to_stream<O>(stream: &mut O, item: &Self::Item, endian: Endian) -> io::Result<()>
     where
         Self: Sized,
