@@ -46,7 +46,7 @@ pub fn normalize_path(path: &mut BString) {
 
     if path.is_empty() || path.len() >= 260 {
         path.clear();
-        path.push(b'\\');
+        path.push(b'.');
     }
 }
 
