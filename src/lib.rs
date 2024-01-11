@@ -21,3 +21,7 @@ where
 }
 
 pub use bstr::{BStr, BString};
+
+pub mod prelude {
+    pub use crate::Read as _;
+}
