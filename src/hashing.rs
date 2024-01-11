@@ -1,5 +1,6 @@
 use bstr::BString;
 
+#[must_use]
 const fn build_lookup_table() -> [u8; 256] {
     let mut table = [0u8; u8::MAX as usize + 1];
     let mut i: u8 = 0;
@@ -26,6 +27,7 @@ const fn build_lookup_table() -> [u8; 256] {
     table
 }
 
+#[must_use]
 fn map_byte(b: u8) -> u8 {
     const LUT: [u8; 256] = build_lookup_table();
     LUT[b as usize]

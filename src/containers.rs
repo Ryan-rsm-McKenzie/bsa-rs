@@ -8,18 +8,22 @@ struct Mapping {
 }
 
 impl Mapping {
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         &self.mapping[self.pos..self.pos + self.len]
     }
 
+    #[must_use]
     pub fn as_ptr(&self) -> *const u8 {
         self.as_bytes().as_ptr()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.len
     }
@@ -38,6 +42,7 @@ pub struct ByteContainer<'a> {
 }
 
 impl<'a> ByteContainer<'a> {
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         match &self.inner {
             Owned(x) => x,
@@ -46,6 +51,7 @@ impl<'a> ByteContainer<'a> {
         }
     }
 
+    #[must_use]
     pub fn as_ptr(&self) -> *const u8 {
         match &self.inner {
             Owned(x) => x.as_ptr(),
@@ -54,12 +60,14 @@ impl<'a> ByteContainer<'a> {
         }
     }
 
+    #[must_use]
     pub fn from_borrowed(bytes: &'a [u8]) -> Self {
         Self {
             inner: Borrowed(bytes),
         }
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         match &self.inner {
             Owned(x) => x.is_empty(),
@@ -68,6 +76,7 @@ impl<'a> ByteContainer<'a> {
         }
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         match &self.inner {
             Owned(x) => x.len(),
@@ -76,6 +85,7 @@ impl<'a> ByteContainer<'a> {
         }
     }
 
+    #[must_use]
     pub fn into_owned(self) -> ByteContainer<'static> {
         ByteContainer {
             inner: match self.inner {
@@ -88,12 +98,14 @@ impl<'a> ByteContainer<'a> {
 }
 
 impl ByteContainer<'static> {
+    #[must_use]
     pub fn from_owned(bytes: Vec<u8>) -> Self {
         Self {
             inner: Owned(bytes),
         }
     }
 
+    #[must_use]
     pub fn from_mapped(pos: usize, len: usize, mapping: Arc<Mmap>) -> Self {
         Self {
             inner: Mapped(Mapping { pos, len, mapping }),

@@ -47,6 +47,7 @@ struct Header {
 }
 
 impl Header {
+    #[must_use]
     fn compute_offsets(&self) -> Offsets {
         let name_offsets = constants::HEADER_SIZE + constants::FILE_ENTRY_SIZE * self.file_count;
         let names = name_offsets + 0x4 * self.file_count;
@@ -241,6 +242,7 @@ impl<'a> File<'a> {
         Ok(())
     }
 
+    #[must_use]
     fn do_read<I>(stream: &mut I) -> Self
     where
         I: ?Sized + Source<'a>,
@@ -250,6 +252,7 @@ impl<'a> File<'a> {
         }
     }
 
+    #[must_use]
     fn from_container(bytes: ByteContainer<'a>) -> Self {
         Self { bytes }
     }
@@ -349,6 +352,7 @@ impl<'a> Archive<'a> {
         self.files.clear();
     }
 
+    #[must_use]
     pub fn get<K>(&self, key: &K) -> Option<&File<'a>>
     where
         K: Borrow<Hash>,
@@ -356,6 +360,7 @@ impl<'a> Archive<'a> {
         self.files.get(key.borrow())
     }
 
+    #[must_use]
     pub fn get_key_value<K>(&self, key: &K) -> Option<(&Key, &File<'a>)>
     where
         K: Borrow<Hash>,
@@ -363,6 +368,7 @@ impl<'a> Archive<'a> {
         self.files.get_key_value(key.borrow())
     }
 
+    #[must_use]
     pub fn get_mut<K>(&mut self, key: &K) -> Option<&mut File<'a>>
     where
         K: Borrow<Hash>,

@@ -109,6 +109,7 @@ pub struct BorrowedSource<'a> {
 }
 
 impl<'a> BorrowedSource<'a> {
+    #[must_use]
     fn make_container(&self, range: Range<usize>) -> ByteContainer<'a> {
         ByteContainer::from_borrowed(&self.source[range])
     }
@@ -128,6 +129,7 @@ pub struct CopiedSource<'a> {
 }
 
 impl<'a> CopiedSource<'a> {
+    #[must_use]
     fn make_container(&self, range: Range<usize>) -> ByteContainer<'static> {
         ByteContainer::from_owned(self.source[range].to_vec())
     }
@@ -147,6 +149,7 @@ pub struct MappedSource {
 }
 
 impl MappedSource {
+    #[must_use]
     fn make_container(&self, range: Range<usize>) -> ByteContainer<'static> {
         ByteContainer::from_mapped(range.start, range.len(), self.source.clone())
     }
@@ -377,6 +380,7 @@ impl<'a, R> Sink<'a, R>
 where
     R: Write,
 {
+    #[must_use]
     pub fn new(stream: &'a mut R) -> Self {
         Self { stream }
     }
