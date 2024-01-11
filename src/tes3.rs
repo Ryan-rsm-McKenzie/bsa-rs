@@ -67,6 +67,7 @@ pub mod hashing {
     use core::cmp::Ordering;
 
     #[derive(Clone, Copy, Debug, Default)]
+    #[repr(C)]
     pub struct Hash {
         pub lo: u32,
         pub hi: u32,
