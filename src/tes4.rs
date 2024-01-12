@@ -1,7 +1,7 @@
 use crate::{
     containers::CompressableByteContainer,
     io::{BorrowedSource, CopiedSource, MappedSource, Source},
-    Borrowed, Copied, Reader,
+    Borrowed, CompressableFrom, Copied, Reader,
 };
 use core::num::TryFromIntError;
 use flate2::{
@@ -529,6 +529,34 @@ impl<'a> File<'a> {
         let mut d = ZlibDecoder::new(out);
         d.write_all(self.as_bytes())?;
         Ok(d.total_out().try_into()?)
+    }
+}
+
+impl<'a> CompressableFrom<&'a [u8]> for File<'a> {
+    fn from_decompressed(value: &'a [u8]) -> Self {
+        Self {
+            bytes: CompressableByteContainer::from_borrowed(value, None),
+        }
+    }
+
+    fn from_compressed(value: &'a [u8], decompressed_len: usize) -> Self {
+        Self {
+            bytes: CompressableByteContainer::from_borrowed(value, Some(decompressed_len)),
+        }
+    }
+}
+
+impl CompressableFrom<Vec<u8>> for File<'static> {
+    fn from_decompressed(value: Vec<u8>) -> Self {
+        Self {
+            bytes: CompressableByteContainer::from_owned(value, None),
+        }
+    }
+
+    fn from_compressed(value: Vec<u8>, decompressed_len: usize) -> Self {
+        Self {
+            bytes: CompressableByteContainer::from_owned(value, Some(decompressed_len)),
+        }
     }
 }
 

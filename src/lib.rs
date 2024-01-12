@@ -21,8 +21,16 @@ where
     fn read(source: T) -> core::result::Result<Self, Self::Error>;
 }
 
+pub trait CompressableFrom<T> {
+    #[must_use]
+    fn from_decompressed(value: T) -> Self;
+
+    #[must_use]
+    fn from_compressed(value: T, decompressed_len: usize) -> Self;
+}
+
 pub use bstr::{BStr, BString};
 
 pub mod prelude {
-    pub use crate::Reader as _;
+    pub use crate::{CompressableFrom as _, Reader as _};
 }
