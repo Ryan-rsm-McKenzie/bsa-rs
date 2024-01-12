@@ -1,17 +1,12 @@
 use crate::{
     containers::ByteContainer,
     derive,
-    io::{BorrowedSource, CopiedSource, Endian, MappedSource, Sink, Source},
+    io::{Endian, Sink, Source},
     strings::ZString,
-    Borrowed, Copied, Reader,
 };
 use bstr::BString;
-use core::{borrow::Borrow, cmp::Ordering, num::TryFromIntError};
-use std::{
-    collections::BTreeMap,
-    fs,
-    io::{self, Write},
-};
+use core::num::TryFromIntError;
+use std::io::{self, Write};
 
 #[non_exhaustive]
 #[derive(thiserror::Error, Debug)]
@@ -139,7 +134,7 @@ pub mod hashing {
 
     #[cfg(test)]
     mod tests {
-        use super::*;
+        use super::{hash_file, Hash};
         use bstr::ByteSlice as _;
 
         #[test]
@@ -152,7 +147,7 @@ pub mod hashing {
 
         #[test]
         fn validate_hashing() {
-            let hash = |x: &[u8]| super::hash_file(x.as_bstr()).0.numeric();
+            let hash = |x: &[u8]| hash_file(x.as_bstr()).0.numeric();
             assert_eq!(
                 hash(b"meshes/c/artifact_bloodring_01.nif"),
                 0x1C3C1149920D5F0C
@@ -176,13 +171,13 @@ pub mod hashing {
 
         #[test]
         fn forward_slashes_are_same_as_back_slashes() {
-            let hash = |x: &[u8]| super::hash_file(x.as_bstr()).0;
+            let hash = |x: &[u8]| hash_file(x.as_bstr()).0;
             assert_eq!(hash(b"foo/bar/baz"), hash(b"foo\\bar\\baz"));
         }
 
         #[test]
         fn hashes_are_case_insensitive() {
-            let hash = |x: &[u8]| super::hash_file(x.as_bstr()).0;
+            let hash = |x: &[u8]| hash_file(x.as_bstr()).0;
             assert_eq!(hash(b"FOO/BAR/BAZ"), hash(b"foo/bar/baz"));
         }
 
@@ -202,7 +197,7 @@ pub struct File<'a> {
     container: ByteContainer<'a>,
 }
 
-derive::container_wrapper!(File);
+derive::container!(File);
 
 impl<'a> File<'a> {
     pub fn write<O>(&self, stream: &mut O) -> Result<()>
@@ -214,13 +209,13 @@ impl<'a> File<'a> {
     }
 
     #[must_use]
-    fn do_read<I>(stream: &mut I) -> Self
+    fn do_read<I>(stream: &mut I) -> Result<Self>
     where
         I: ?Sized + Source<'a>,
     {
-        Self {
+        Ok(Self {
             container: stream.read_to_end(),
-        }
+        })
     }
 
     #[must_use]
@@ -245,152 +240,18 @@ impl From<Vec<u8>> for File<'static> {
     }
 }
 
-impl<'a> Reader<Borrowed<'a>> for File<'a> {
-    type Error = Error;
+derive::key!(ArchiveKey);
 
-    fn read(source: Borrowed<'a>) -> Result<Self> {
-        let mut source = BorrowedSource::from(source.0);
-        Ok(Self::do_read(&mut source))
+impl ArchiveKey {
+    #[must_use]
+    fn hash_in_place(name: &mut BString) -> Hash {
+        hashing::hash_file_in_place(name)
     }
 }
 
-impl<'a> Reader<Copied<'a>> for File<'static> {
-    type Error = Error;
-
-    fn read(source: Copied<'a>) -> Result<Self> {
-        let mut source = CopiedSource::from(source.0);
-        Ok(Self::do_read(&mut source))
-    }
-}
-
-impl Reader<&fs::File> for File<'static> {
-    type Error = Error;
-
-    fn read(source: &fs::File) -> Result<Self> {
-        let mut source = MappedSource::try_from(source)?;
-        Ok(Self::do_read(&mut source))
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct Key {
-    pub hash: Hash,
-    pub name: BString,
-}
-
-impl PartialEq for Key {
-    fn eq(&self, other: &Self) -> bool {
-        self.hash.eq(&other.hash)
-    }
-}
-
-impl Eq for Key {}
-
-impl PartialOrd for Key {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Key {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.hash.cmp(&other.hash)
-    }
-}
-
-impl Borrow<Hash> for Key {
-    fn borrow(&self) -> &Hash {
-        &self.hash
-    }
-}
-
-impl From<BString> for Key {
-    fn from(mut name: BString) -> Self {
-        let hash = hashing::hash_file_in_place(&mut name);
-        Self { hash, name }
-    }
-}
-
-type FileMap<'a> = BTreeMap<Key, File<'a>>;
-
-#[derive(Default)]
-pub struct Archive<'a> {
-    files: FileMap<'a>,
-}
+derive::archive!(Archive, ArchiveMap: ArchiveKey => File);
 
 impl<'a> Archive<'a> {
-    pub fn clear(&mut self) {
-        self.files.clear();
-    }
-
-    #[must_use]
-    pub fn get<K>(&self, key: &K) -> Option<&File<'a>>
-    where
-        K: Borrow<Hash>,
-    {
-        self.files.get(key.borrow())
-    }
-
-    #[must_use]
-    pub fn get_key_value<K>(&self, key: &K) -> Option<(&Key, &File<'a>)>
-    where
-        K: Borrow<Hash>,
-    {
-        self.files.get_key_value(key.borrow())
-    }
-
-    #[must_use]
-    pub fn get_mut<K>(&mut self, key: &K) -> Option<&mut File<'a>>
-    where
-        K: Borrow<Hash>,
-    {
-        self.files.get_mut(key.borrow())
-    }
-
-    pub fn insert<K>(&mut self, key: K, value: File<'a>) -> Option<File<'a>>
-    where
-        K: Into<Key>,
-    {
-        self.files.insert(key.into(), value)
-    }
-
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.files.is_empty()
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (&Key, &File<'a>)> {
-        self.files.iter()
-    }
-
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&Key, &mut File<'a>)> {
-        self.files.iter_mut()
-    }
-
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.files.len()
-    }
-
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn remove<K>(&mut self, key: &K) -> Option<File<'a>>
-    where
-        K: Borrow<Hash>,
-    {
-        self.files.remove(key.borrow())
-    }
-
-    pub fn remove_entry<K>(&mut self, key: &K) -> Option<(Key, File<'a>)>
-    where
-        K: Borrow<Hash>,
-    {
-        self.files.remove_entry(key.borrow())
-    }
-
     pub fn write<O>(&self, stream: &mut O) -> Result<()>
     where
         O: Write,
@@ -413,14 +274,14 @@ impl<'a> Archive<'a> {
     {
         let header = Self::read_header(source)?;
         let offsets = header.compute_offsets();
-        let mut files = FileMap::default();
+        let mut map = ArchiveMap::default();
 
         for i in 0..header.file_count {
             let (hash, name, file) = Self::read_file(source, i, &offsets)?;
-            files.insert(Key { hash, name }, file);
+            map.insert(ArchiveKey { hash, name }, file);
         }
 
-        Ok(Self { files })
+        Ok(Self { map })
     }
 
     fn read_file<I>(
@@ -479,10 +340,10 @@ impl<'a> Archive<'a> {
 
     fn make_header(&self) -> Result<Header> {
         Ok(Header {
-            file_count: self.files.len().try_into()?,
+            file_count: self.map.len().try_into()?,
             hash_offset: {
-                let names_offset = 0xC * self.files.len();
-                let names_len: usize = self.files.keys().map(|x| x.name.len() + 1).sum();
+                let names_offset = 0xC * self.map.len();
+                let names_len: usize = self.map.keys().map(|x| x.name.len() + 1).sum();
                 (names_offset + names_len).try_into()?
             },
         })
@@ -493,7 +354,7 @@ impl<'a> Archive<'a> {
         O: Write,
     {
         let mut offset: u32 = 0;
-        for file in self.files.values() {
+        for file in self.map.values() {
             let size: u32 = file.container.len().try_into()?;
             sink.write(&(size, offset), Endian::Little)?;
             offset += size;
@@ -506,7 +367,7 @@ impl<'a> Archive<'a> {
     where
         O: Write,
     {
-        for file in self.files.values() {
+        for file in self.map.values() {
             sink.write_bytes(file.as_bytes())?;
         }
 
@@ -517,7 +378,7 @@ impl<'a> Archive<'a> {
     where
         O: Write,
     {
-        for key in self.files.keys() {
+        for key in self.map.keys() {
             let hash = &key.hash;
             sink.write(&(hash.lo, hash.hi), Endian::Little)?;
         }
@@ -545,7 +406,7 @@ impl<'a> Archive<'a> {
         O: Write,
     {
         let mut offset: u32 = 0;
-        for key in self.files.keys() {
+        for key in self.map.keys() {
             sink.write(&offset, Endian::Little)?;
             offset += u32::try_from(key.name.len() + 1)?;
         }
@@ -557,7 +418,7 @@ impl<'a> Archive<'a> {
     where
         O: Write,
     {
-        for key in self.files.keys() {
+        for key in self.map.keys() {
             sink.write_protocol::<ZString>(&key.name, Endian::Little)?;
         }
 
@@ -565,64 +426,10 @@ impl<'a> Archive<'a> {
     }
 }
 
-impl<'a> IntoIterator for Archive<'a> {
-    type Item = <FileMap<'a> as IntoIterator>::Item;
-    type IntoIter = <FileMap<'a> as IntoIterator>::IntoIter;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.files.into_iter()
-    }
-}
-
-impl<'a, 'b> IntoIterator for &'b Archive<'a> {
-    type Item = <&'b FileMap<'a> as IntoIterator>::Item;
-    type IntoIter = <&'b FileMap<'a> as IntoIterator>::IntoIter;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.files.iter()
-    }
-}
-
-impl<'a, 'b> IntoIterator for &'b mut Archive<'a> {
-    type Item = <&'b mut FileMap<'a> as IntoIterator>::Item;
-    type IntoIter = <&'b mut FileMap<'a> as IntoIterator>::IntoIter;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.files.iter_mut()
-    }
-}
-
-impl<'a> Reader<Borrowed<'a>> for Archive<'a> {
-    type Error = Error;
-
-    fn read(source: Borrowed<'a>) -> Result<Self> {
-        let mut source = BorrowedSource::from(source.0);
-        Self::do_read(&mut source)
-    }
-}
-
-impl<'a> Reader<Copied<'a>> for Archive<'static> {
-    type Error = Error;
-
-    fn read(source: Copied<'a>) -> Result<Self> {
-        let mut source = CopiedSource::from(source.0);
-        Self::do_read(&mut source)
-    }
-}
-
-impl Reader<&fs::File> for Archive<'static> {
-    type Error = Error;
-
-    fn read(source: &fs::File) -> Result<Self> {
-        let mut source = MappedSource::try_from(source)?;
-        Self::do_read(&mut source)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     mod file {
-        use super::super::*;
+        use crate::tes3::File;
 
         #[test]
         fn default_state() -> anyhow::Result<()> {
@@ -635,11 +442,20 @@ mod tests {
     }
 
     mod archive {
-        use super::super::*;
+        use crate::{
+            prelude::*,
+            tes3::{hashing, Archive, ArchiveKey, Error, File, Hash},
+            Borrowed,
+        };
         use anyhow::Context as _;
-        use bstr::ByteSlice as _;
+        use bstr::{BString, ByteSlice as _};
         use memmap2::Mmap;
-        use std::{ffi::OsStr, fs, io::Read as _, path::Path};
+        use std::{
+            ffi::OsStr,
+            fs,
+            io::{self, Read as _},
+            path::Path,
+        };
         use walkdir::WalkDir;
 
         #[test]
@@ -729,14 +545,14 @@ mod tests {
         #[test]
         fn writing() -> anyhow::Result<()> {
             struct Info<'a> {
-                key: Key,
+                key: ArchiveKey,
                 path: &'a Path,
             }
 
             impl<'a> Info<'a> {
                 fn new(lo: u32, hi: u32, path: &'a str) -> Self {
                     let hash = Hash { lo, hi };
-                    let key = Key::from(BString::from(path));
+                    let key = ArchiveKey::from(BString::from(path));
                     assert_eq!(hash, key.hash);
                     Self {
                         key,
@@ -797,7 +613,7 @@ mod tests {
         #[test]
         fn assert_generic_interfaces_compile() -> anyhow::Result<()> {
             let mut bsa = Archive::default();
-            let key = Key::default();
+            let key = ArchiveKey::default();
             let hash = Hash::default();
 
             _ = bsa.get(&key);

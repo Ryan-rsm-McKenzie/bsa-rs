@@ -1,19 +1,12 @@
-use crate::{
-    containers::CompressableByteContainer,
-    derive,
-    io::{BorrowedSource, CopiedSource, MappedSource, Source},
-    Borrowed, CompressableFrom, Copied, Reader,
-};
+use crate::{containers::CompressableByteContainer, derive, io::Source, CompressableFrom};
+use bstr::BString;
 use core::num::TryFromIntError;
 use flate2::{
     write::{ZlibDecoder, ZlibEncoder},
     Compression,
 };
 use lzzzz::lz4f::{self, AutoFlush, PreferencesBuilder};
-use std::{
-    fs,
-    io::{self, Write},
-};
+use std::io::{self, Write};
 
 pub mod errors {
     use core::fmt::{self, Display, Formatter};
@@ -236,7 +229,8 @@ pub mod hashing {
 
     #[cfg(test)]
     mod tests {
-        use super::*;
+        use super::{hash_directory, hash_file, make_four_cc};
+        use bstr::ByteSlice as _;
 
         #[test]
         fn four_cc() -> anyhow::Result<()> {
@@ -373,7 +367,7 @@ pub struct File<'a> {
     container: CompressableByteContainer<'a>,
 }
 
-derive::container_wrapper!(File);
+derive::container!(File);
 
 impl<'a> File<'a> {
     pub fn compress(&self, options: CompressionOptions) -> Result<File<'static>> {
@@ -463,13 +457,13 @@ impl<'a> File<'a> {
     }
 
     #[must_use]
-    fn do_read<I>(stream: &mut I) -> Self
+    fn do_read<I>(stream: &mut I) -> Result<Self>
     where
         I: ?Sized + Source<'a>,
     {
-        Self {
+        Ok(Self {
             container: stream.read_to_end().into_compressable(None),
-        }
+        })
     }
 
     fn compress_into_lz4(&self, out: &mut Vec<u8>) -> Result<()> {
@@ -528,29 +522,33 @@ impl CompressableFrom<Vec<u8>> for File<'static> {
     }
 }
 
-impl<'a> Reader<Borrowed<'a>> for File<'a> {
-    type Error = Error;
+derive::key!(DirectoryKey);
 
-    fn read(source: Borrowed<'a>) -> Result<Self> {
-        let mut source = BorrowedSource::from(source.0);
-        Ok(Self::do_read(&mut source))
+impl DirectoryKey {
+    #[must_use]
+    fn hash_in_place(name: &mut BString) -> Hash {
+        hashing::hash_directory_in_place(name)
     }
 }
 
-impl<'a> Reader<Copied<'a>> for File<'static> {
-    type Error = Error;
+derive::mapping!(Directory, DirectoryMap: DirectoryKey => File);
 
-    fn read(source: Copied<'a>) -> Result<Self> {
-        let mut source = CopiedSource::from(source.0);
-        Ok(Self::do_read(&mut source))
+derive::key!(ArchiveKey);
+
+impl ArchiveKey {
+    #[must_use]
+    fn hash_in_place(name: &mut BString) -> Hash {
+        hashing::hash_file_in_place(name)
     }
 }
 
-impl Reader<&fs::File> for File<'static> {
-    type Error = Error;
+derive::archive!(Archive, ArchiveMap: ArchiveKey => Directory);
 
-    fn read(source: &fs::File) -> Result<Self> {
-        let mut source = MappedSource::try_from(source)?;
-        Ok(Self::do_read(&mut source))
+impl<'a> Archive<'a> {
+    fn do_read<I>(source: &mut I) -> Result<Self>
+    where
+        I: ?Sized + Source<'a>,
+    {
+        todo!()
     }
 }
