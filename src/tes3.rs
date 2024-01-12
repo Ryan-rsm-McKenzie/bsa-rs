@@ -1,5 +1,5 @@
 use crate::{
-    containers::ByteContainer,
+    containers::{self, ByteContainer},
     io::{BorrowedSource, CopiedSource, Endian, MappedSource, Sink, Source},
     strings::ZString,
     Borrowed, Copied, Reader,
@@ -198,42 +198,12 @@ use hashing::Hash;
 
 #[derive(Default)]
 pub struct File<'a> {
-    bytes: ByteContainer<'a>,
+    container: ByteContainer<'a>,
 }
 
+containers::implement_container_wrapper!(File);
+
 impl<'a> File<'a> {
-    #[must_use]
-    pub fn as_bytes(&self) -> &[u8] {
-        self.bytes.as_bytes()
-    }
-
-    #[must_use]
-    pub fn as_ptr(&self) -> *const u8 {
-        self.bytes.as_ptr()
-    }
-
-    #[must_use]
-    pub fn into_owned(self) -> File<'static> {
-        File {
-            bytes: self.bytes.into_owned(),
-        }
-    }
-
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.bytes.is_empty()
-    }
-
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.bytes.len()
-    }
-
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn write<O>(&self, stream: &mut O) -> Result<()>
     where
         O: ?Sized + Write,
@@ -248,20 +218,20 @@ impl<'a> File<'a> {
         I: ?Sized + Source<'a>,
     {
         Self {
-            bytes: stream.read_to_end(),
+            container: stream.read_to_end(),
         }
     }
 
     #[must_use]
     fn from_container(bytes: ByteContainer<'a>) -> Self {
-        Self { bytes }
+        Self { container: bytes }
     }
 }
 
 impl<'a> From<&'a [u8]> for File<'a> {
     fn from(value: &'a [u8]) -> Self {
         Self {
-            bytes: ByteContainer::from_borrowed(value),
+            container: ByteContainer::from_borrowed(value),
         }
     }
 }
@@ -269,7 +239,7 @@ impl<'a> From<&'a [u8]> for File<'a> {
 impl From<Vec<u8>> for File<'static> {
     fn from(value: Vec<u8>) -> Self {
         Self {
-            bytes: ByteContainer::from_owned(value),
+            container: ByteContainer::from_owned(value),
         }
     }
 }
@@ -523,7 +493,7 @@ impl<'a> Archive<'a> {
     {
         let mut offset: u32 = 0;
         for file in self.files.values() {
-            let size: u32 = file.bytes.len().try_into()?;
+            let size: u32 = file.container.len().try_into()?;
             sink.write(&(size, offset), Endian::Little)?;
             offset += size;
         }

@@ -1,5 +1,5 @@
 use crate::{
-    containers::CompressableByteContainer,
+    containers::{self, CompressableByteContainer},
     io::{BorrowedSource, CopiedSource, MappedSource, Source},
     Borrowed, CompressableFrom, Copied, Reader,
 };
@@ -369,26 +369,18 @@ impl CompressionOptions {
 
 #[derive(Default)]
 pub struct File<'a> {
-    bytes: CompressableByteContainer<'a>,
+    container: CompressableByteContainer<'a>,
 }
 
+containers::implement_container_wrapper!(File);
+
 impl<'a> File<'a> {
-    #[must_use]
-    pub fn as_bytes(&self) -> &[u8] {
-        self.bytes.as_bytes()
-    }
-
-    #[must_use]
-    pub fn as_ptr(&self) -> *const u8 {
-        self.bytes.as_ptr()
-    }
-
     pub fn compress(&self, options: CompressionOptions) -> Result<File<'static>> {
         let mut bytes = Vec::new();
         self.compress_into(&mut bytes, options)?;
         bytes.shrink_to_fit();
         Ok(File {
-            bytes: CompressableByteContainer::from_owned(bytes, Some(self.len())),
+            container: CompressableByteContainer::from_owned(bytes, Some(self.len())),
         })
     }
 
@@ -411,7 +403,7 @@ impl<'a> File<'a> {
         self.decompress_into(&mut bytes, options)?;
         bytes.shrink_to_fit();
         Ok(File {
-            bytes: CompressableByteContainer::from_owned(bytes, None),
+            container: CompressableByteContainer::from_owned(bytes, None),
         })
     }
 
@@ -441,39 +433,17 @@ impl<'a> File<'a> {
 
     #[must_use]
     pub fn decompressed_len(&self) -> Option<usize> {
-        self.bytes.decompressed_len()
-    }
-
-    #[must_use]
-    pub fn into_owned(self) -> File<'static> {
-        File {
-            bytes: self.bytes.into_owned(),
-        }
+        self.container.decompressed_len()
     }
 
     #[must_use]
     pub fn is_compressed(&self) -> bool {
-        self.bytes.is_compressed()
+        self.container.is_compressed()
     }
 
     #[must_use]
     pub fn is_decompressed(&self) -> bool {
         !self.is_compressed()
-    }
-
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.bytes.is_empty()
-    }
-
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.bytes.len()
-    }
-
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
     }
 
     pub fn write<O>(&self, stream: &mut O, options: CompressionOptions) -> Result<()>
@@ -497,7 +467,7 @@ impl<'a> File<'a> {
         I: ?Sized + Source<'a>,
     {
         Self {
-            bytes: stream.read_to_end().into_compressable(None),
+            container: stream.read_to_end().into_compressable(None),
         }
     }
 
@@ -532,13 +502,13 @@ impl<'a> File<'a> {
 impl<'a> CompressableFrom<&'a [u8]> for File<'a> {
     fn from_compressed(value: &'a [u8], decompressed_len: usize) -> Self {
         Self {
-            bytes: CompressableByteContainer::from_borrowed(value, Some(decompressed_len)),
+            container: CompressableByteContainer::from_borrowed(value, Some(decompressed_len)),
         }
     }
 
     fn from_decompressed(value: &'a [u8]) -> Self {
         Self {
-            bytes: CompressableByteContainer::from_borrowed(value, None),
+            container: CompressableByteContainer::from_borrowed(value, None),
         }
     }
 }
@@ -546,13 +516,13 @@ impl<'a> CompressableFrom<&'a [u8]> for File<'a> {
 impl CompressableFrom<Vec<u8>> for File<'static> {
     fn from_compressed(value: Vec<u8>, decompressed_len: usize) -> Self {
         Self {
-            bytes: CompressableByteContainer::from_owned(value, Some(decompressed_len)),
+            container: CompressableByteContainer::from_owned(value, Some(decompressed_len)),
         }
     }
 
     fn from_decompressed(value: Vec<u8>) -> Self {
         Self {
-            bytes: CompressableByteContainer::from_owned(value, None),
+            container: CompressableByteContainer::from_owned(value, None),
         }
     }
 }
