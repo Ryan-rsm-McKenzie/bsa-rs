@@ -550,10 +550,10 @@ impl<'a> Reader<Copied<'a>> for File<'static> {
     }
 }
 
-impl Reader<fs::File> for File<'static> {
+impl Reader<&fs::File> for File<'static> {
     type Error = Error;
 
-    fn read(source: fs::File) -> Result<Self> {
+    fn read(source: &fs::File) -> Result<Self> {
         let mut source = MappedSource::try_from(source)?;
         Ok(Self::do_read(&mut source))
     }

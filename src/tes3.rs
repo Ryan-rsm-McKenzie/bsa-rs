@@ -292,10 +292,10 @@ impl<'a> Reader<Copied<'a>> for File<'static> {
     }
 }
 
-impl Reader<fs::File> for File<'static> {
+impl Reader<&fs::File> for File<'static> {
     type Error = Error;
 
-    fn read(source: fs::File) -> Result<Self> {
+    fn read(source: &fs::File) -> Result<Self> {
         let mut source = MappedSource::try_from(source)?;
         Ok(Self::do_read(&mut source))
     }
@@ -639,10 +639,10 @@ impl<'a> Reader<Copied<'a>> for Archive<'static> {
     }
 }
 
-impl Reader<fs::File> for Archive<'static> {
+impl Reader<&fs::File> for Archive<'static> {
     type Error = Error;
 
-    fn read(source: fs::File) -> Result<Self> {
+    fn read(source: &fs::File) -> Result<Self> {
         let mut source = MappedSource::try_from(source)?;
         Self::do_read(&mut source)
     }
@@ -684,7 +684,7 @@ mod tests {
             let path = Path::new("data/tes3_invalid_test/invalid_magic.bsa");
             let stream =
                 fs::File::open(&path).with_context(|| format!("failed to open file: {path:?}"))?;
-            let read_result = Archive::read(stream);
+            let read_result = Archive::read(&stream);
             let test = match read_result {
                 Err(Error::InvalidMagic(0x200)) => true,
                 _ => false,
@@ -699,7 +699,7 @@ mod tests {
             let path = Path::new("data/tes3_invalid_test/invalid_exhausted.bsa");
             let stream =
                 fs::File::open(&path).with_context(|| format!("failed to open file: {path:?}"))?;
-            let read_result = Archive::read(stream);
+            let read_result = Archive::read(&stream);
             let test = match read_result {
                 Err(Error::Io(io)) if io.kind() == io::ErrorKind::UnexpectedEof => true,
                 _ => false,
@@ -716,7 +716,7 @@ mod tests {
                 let archive_path = root_path.join("test.bsa");
                 let stream = fs::File::open(&archive_path)
                     .with_context(|| format!("failed to open test archive: {archive_path:?}"))?;
-                Archive::read(stream)
+                Archive::read(&stream)
                     .with_context(|| format!("failed to read from archive: {archive_path:?}"))?
             };
 

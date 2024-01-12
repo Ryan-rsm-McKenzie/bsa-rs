@@ -155,12 +155,12 @@ impl MappedSource {
     }
 }
 
-impl TryFrom<File> for MappedSource {
+impl TryFrom<&File> for MappedSource {
     type Error = io::Error;
 
-    fn try_from(value: File) -> Result<Self, Self::Error> {
+    fn try_from(value: &File) -> Result<Self, Self::Error> {
         let options = MmapOptions::new();
-        let mapping = unsafe { options.map(&value) }?;
+        let mapping = unsafe { options.map(value) }?;
         Ok(Self {
             source: Arc::new(mapping),
             pos: 0,
