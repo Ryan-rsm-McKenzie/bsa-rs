@@ -11,11 +11,11 @@ use std::io::{self, Write};
 #[non_exhaustive]
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("invalid magic read from file header")]
-    InvalidMagic(u32),
-
     #[error(transparent)]
     IntegralTruncation(#[from] TryFromIntError),
+
+    #[error("invalid magic read from file header")]
+    InvalidMagic(u32),
 
     #[error(transparent)]
     Io(#[from] io::Error),

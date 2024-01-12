@@ -42,13 +42,13 @@ pub enum Error {
     DecompressionSizeMismatch(#[from] errors::DecompressionSizeMismatch),
 
     #[error(transparent)]
-    LZ4(#[from] lz4f::Error),
-
-    #[error(transparent)]
     IntegralTruncation(#[from] TryFromIntError),
 
     #[error(transparent)]
     Io(#[from] io::Error),
+
+    #[error(transparent)]
+    LZ4(#[from] lz4f::Error),
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
