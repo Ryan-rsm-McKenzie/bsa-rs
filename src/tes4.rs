@@ -8,7 +8,7 @@ use flate2::{
     write::{ZlibDecoder, ZlibEncoder},
     Compression,
 };
-use lzzzz::lz4f::{self, AutoFlush, Preferences, PreferencesBuilder};
+use lzzzz::lz4f::{self, AutoFlush, PreferencesBuilder};
 use std::{
     fs,
     io::{self, Write},
