@@ -1,5 +1,6 @@
 use crate::{
-    containers::{self, ByteContainer},
+    containers::ByteContainer,
+    derive,
     io::{BorrowedSource, CopiedSource, Endian, MappedSource, Sink, Source},
     strings::ZString,
     Borrowed, Copied, Reader,
@@ -201,7 +202,7 @@ pub struct File<'a> {
     container: ByteContainer<'a>,
 }
 
-containers::implement_container_wrapper!(File);
+derive::container_wrapper!(File);
 
 impl<'a> File<'a> {
     pub fn write<O>(&self, stream: &mut O) -> Result<()>

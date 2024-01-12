@@ -1,5 +1,6 @@
 use crate::{
-    containers::{self, CompressableByteContainer},
+    containers::CompressableByteContainer,
+    derive,
     io::{BorrowedSource, CopiedSource, MappedSource, Source},
     Borrowed, CompressableFrom, Copied, Reader,
 };
@@ -372,7 +373,7 @@ pub struct File<'a> {
     container: CompressableByteContainer<'a>,
 }
 
-containers::implement_container_wrapper!(File);
+derive::container_wrapper!(File);
 
 impl<'a> File<'a> {
     pub fn compress(&self, options: CompressionOptions) -> Result<File<'static>> {

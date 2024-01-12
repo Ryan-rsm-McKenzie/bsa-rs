@@ -2,6 +2,7 @@
 #![allow(clippy::enum_glob_use, clippy::missing_errors_doc)]
 
 mod containers;
+mod derive;
 mod hashing;
 mod io;
 mod strings;
