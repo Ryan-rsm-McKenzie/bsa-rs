@@ -452,11 +452,6 @@ impl<'a> File<'a> {
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.bytes.is_empty()
-    }
-
-    #[must_use]
     pub fn is_compressed(&self) -> bool {
         self.bytes.is_compressed()
     }
@@ -464,6 +459,11 @@ impl<'a> File<'a> {
     #[must_use]
     pub fn is_decompressed(&self) -> bool {
         !self.is_compressed()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
     }
 
     #[must_use]
