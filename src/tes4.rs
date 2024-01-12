@@ -1,3 +1,84 @@
+use crate::{
+    containers::CompressableByteContainer,
+    io::{BorrowedSource, CopiedSource, MappedSource, Source},
+    Borrowed, Copied, Reader,
+};
+use core::num::TryFromIntError;
+use flate2::{
+    write::{ZlibDecoder, ZlibEncoder},
+    Compression,
+};
+use lzzzz::lz4f::{self, AutoFlush, Preferences, PreferencesBuilder};
+use std::{
+    fs,
+    io::{self, Write},
+};
+
+pub mod errors {
+    use core::fmt::{self, Display, Formatter};
+    use std::error;
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct DecompressionSizeMismatch {
+        pub expected: usize,
+        pub actual: usize,
+    }
+
+    impl Display for DecompressionSizeMismatch {
+        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+            write!(f, "buffer failed to decompress to the expected size... expected {} bytes, but got {} bytes", self.expected, self.actual)
+        }
+    }
+
+    impl error::Error for DecompressionSizeMismatch {}
+}
+
+use errors::DecompressionSizeMismatch;
+
+#[non_exhaustive]
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("can not compress the given file because it is already compressed")]
+    AlreadyCompressed,
+
+    #[error("can not decompress the given file because it is already decompressed")]
+    AlreadyDecompressed,
+
+    #[error(transparent)]
+    DecompressionSizeMismatch(#[from] errors::DecompressionSizeMismatch),
+
+    #[error(transparent)]
+    LZ4(#[from] lz4f::Error),
+
+    #[error(transparent)]
+    IntegralTruncation(#[from] TryFromIntError),
+
+    #[error(transparent)]
+    Io(#[from] io::Error),
+}
+
+pub type Result<T> = core::result::Result<T, Error>;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CompressionCodec {
+    #[default]
+    Normal,
+    //XMem,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+pub enum Version {
+    #[default]
+    TES4 = 103,
+    FO3 = 104,
+    SSE = 105,
+}
+
+impl Version {
+    pub const FNV: Version = Version::FO3;
+    pub const TES5: Version = Version::FO3;
+}
+
 pub mod hashing {
     use crate::hashing as detail;
     use bstr::{BStr, BString, ByteSlice as _};
@@ -185,7 +266,7 @@ pub mod hashing {
         fn validate_file_hashes() {
             let h = |path: &[u8]| hash_file(path.as_bstr()).0.numeric();
             assert_eq!(h(b"darkbrotherhood__0007469a_1.fuz"), 0x011F11B0641B5F31);
-            assert_eq!(h(b"elder_council_amulet_n.dds"), 0xDC531E2F6516DFEE,);
+            assert_eq!(h(b"elder_council_amulet_n.dds"), 0xDC531E2F6516DFEE);
             assert_eq!(
                 h(b"testtoddquest_testtoddhappy_00027fa2_1.mp3"),
                 0xDE0301EE74265F31
@@ -256,5 +337,224 @@ pub mod hashing {
             let h2 = hash_file(b"test.txt".as_bstr()).0;
             assert_eq!(h1, h2);
         }
+    }
+}
+
+use hashing::Hash;
+
+#[derive(Clone, Copy, Default)]
+pub struct CompressionOptions {
+    version: Version,
+    compression_codec: CompressionCodec,
+}
+
+impl CompressionOptions {
+    #[must_use]
+    pub fn build(self) -> Self {
+        self
+    }
+
+    #[must_use]
+    pub fn compression_codec(&mut self, compression_codec: CompressionCodec) -> &mut Self {
+        self.compression_codec = compression_codec;
+        self
+    }
+
+    #[must_use]
+    pub fn version(&mut self, version: Version) -> &mut Self {
+        self.version = version;
+        self
+    }
+}
+
+#[derive(Default)]
+pub struct File<'a> {
+    bytes: CompressableByteContainer<'a>,
+}
+
+impl<'a> File<'a> {
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8] {
+        self.bytes.as_bytes()
+    }
+
+    #[must_use]
+    pub fn as_ptr(&self) -> *const u8 {
+        self.bytes.as_ptr()
+    }
+
+    pub fn compress(&self, options: CompressionOptions) -> Result<File<'static>> {
+        let mut bytes = Vec::new();
+        self.compress_into(&mut bytes, options)?;
+        bytes.shrink_to_fit();
+        Ok(File {
+            bytes: CompressableByteContainer::from_owned(bytes, Some(self.len())),
+        })
+    }
+
+    pub fn compress_into(&self, out: &mut Vec<u8>, options: CompressionOptions) -> Result<()> {
+        if self.is_compressed() {
+            Err(Error::AlreadyCompressed)
+        } else {
+            match options.version {
+                Version::TES4 => self.compress_into_zlib(out),
+                Version::FO3 => match options.compression_codec {
+                    CompressionCodec::Normal => self.compress_into_zlib(out),
+                },
+                Version::SSE => self.compress_into_lz4(out),
+            }
+        }
+    }
+
+    pub fn decompress(&self, options: CompressionOptions) -> Result<File<'static>> {
+        let mut bytes = Vec::new();
+        self.decompress_into(&mut bytes, options)?;
+        bytes.shrink_to_fit();
+        Ok(File {
+            bytes: CompressableByteContainer::from_owned(bytes, None),
+        })
+    }
+
+    pub fn decompress_into(&self, out: &mut Vec<u8>, options: CompressionOptions) -> Result<()> {
+        let Some(decompressed_len) = self.decompressed_len() else {
+            return Err(Error::AlreadyDecompressed);
+        };
+
+        out.reserve_exact(decompressed_len);
+        let out_len = match options.version {
+            Version::TES4 => self.decompress_into_zlib(out),
+            Version::FO3 => match options.compression_codec {
+                CompressionCodec::Normal => self.decompress_into_zlib(out),
+            },
+            Version::SSE => self.decompress_into_lz4(out),
+        }?;
+
+        if out_len == decompressed_len {
+            Ok(())
+        } else {
+            Err(Error::from(DecompressionSizeMismatch {
+                expected: decompressed_len,
+                actual: out_len,
+            }))
+        }
+    }
+
+    #[must_use]
+    pub fn decompressed_len(&self) -> Option<usize> {
+        self.bytes.decompressed_len()
+    }
+
+    #[must_use]
+    pub fn into_owned(self) -> File<'static> {
+        File {
+            bytes: self.bytes.into_owned(),
+        }
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
+    }
+
+    #[must_use]
+    pub fn is_compressed(&self) -> bool {
+        self.bytes.is_compressed()
+    }
+
+    #[must_use]
+    pub fn is_decompressed(&self) -> bool {
+        !self.is_compressed()
+    }
+
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.bytes.len()
+    }
+
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn write<O>(&self, stream: &mut O, options: CompressionOptions) -> Result<()>
+    where
+        O: ?Sized + Write,
+    {
+        if self.is_compressed() {
+            let mut bytes = Vec::new();
+            self.decompress_into(&mut bytes, options)?;
+            stream.write_all(&bytes)?;
+        } else {
+            stream.write_all(self.as_bytes())?;
+        }
+
+        Ok(())
+    }
+
+    #[must_use]
+    fn do_read<I>(stream: &mut I) -> Self
+    where
+        I: ?Sized + Source<'a>,
+    {
+        Self {
+            bytes: stream.read_to_end().into_compressable(None),
+        }
+    }
+
+    fn lz4f_prefs() -> Preferences {
+        PreferencesBuilder::new()
+            .compression_level(9)
+            .auto_flush(AutoFlush::Enabled)
+            .build()
+    }
+
+    fn compress_into_lz4(&self, out: &mut Vec<u8>) -> Result<()> {
+        lz4f::compress_to_vec(self.as_bytes(), out, &Self::lz4f_prefs())?;
+        Ok(())
+    }
+
+    fn compress_into_zlib(&self, out: &mut Vec<u8>) -> Result<()> {
+        let mut e = ZlibEncoder::new(out, Compression::default());
+        e.write_all(self.as_bytes())?;
+        e.finish()?;
+        Ok(())
+    }
+
+    fn decompress_into_lz4(&self, out: &mut Vec<u8>) -> Result<usize> {
+        let len = lz4f::decompress_to_vec(self.as_bytes(), out)?;
+        Ok(len)
+    }
+
+    fn decompress_into_zlib(&self, out: &mut Vec<u8>) -> Result<usize> {
+        let mut d = ZlibDecoder::new(out);
+        d.write_all(self.as_bytes())?;
+        Ok(d.total_out().try_into()?)
+    }
+}
+
+impl<'a> Reader<Borrowed<'a>> for File<'a> {
+    type Error = Error;
+
+    fn read(source: Borrowed<'a>) -> Result<Self> {
+        let mut source = BorrowedSource::from(source.0);
+        Ok(Self::do_read(&mut source))
+    }
+}
+
+impl<'a> Reader<Copied<'a>> for File<'static> {
+    type Error = Error;
+
+    fn read(source: Copied<'a>) -> Result<Self> {
+        let mut source = CopiedSource::from(source.0);
+        Ok(Self::do_read(&mut source))
+    }
+}
+
+impl Reader<fs::File> for File<'static> {
+    type Error = Error;
+
+    fn read(source: fs::File) -> Result<Self> {
+        let mut source = MappedSource::try_from(source)?;
+        Ok(Self::do_read(&mut source))
     }
 }

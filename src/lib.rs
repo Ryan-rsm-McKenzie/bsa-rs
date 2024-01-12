@@ -12,7 +12,7 @@ pub struct Borrowed<'a>(pub &'a [u8]);
 
 pub struct Copied<'a>(pub &'a [u8]);
 
-pub trait Read<T>
+pub trait Reader<T>
 where
     Self: Sized,
 {
@@ -24,5 +24,5 @@ where
 pub use bstr::{BStr, BString};
 
 pub mod prelude {
-    pub use crate::Read as _;
+    pub use crate::Reader as _;
 }

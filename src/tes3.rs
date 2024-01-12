@@ -2,7 +2,7 @@ use crate::{
     containers::ByteContainer,
     io::{BorrowedSource, CopiedSource, Endian, MappedSource, Sink, Source},
     strings::ZString,
-    Borrowed, Copied, Read,
+    Borrowed, Copied, Reader,
 };
 use bstr::BString;
 use core::{borrow::Borrow, cmp::Ordering, num::TryFromIntError};
@@ -274,7 +274,7 @@ impl From<Vec<u8>> for File<'static> {
     }
 }
 
-impl<'a> Read<Borrowed<'a>> for File<'a> {
+impl<'a> Reader<Borrowed<'a>> for File<'a> {
     type Error = Error;
 
     fn read(source: Borrowed<'a>) -> Result<Self> {
@@ -283,7 +283,7 @@ impl<'a> Read<Borrowed<'a>> for File<'a> {
     }
 }
 
-impl<'a> Read<Copied<'a>> for File<'static> {
+impl<'a> Reader<Copied<'a>> for File<'static> {
     type Error = Error;
 
     fn read(source: Copied<'a>) -> Result<Self> {
@@ -292,7 +292,7 @@ impl<'a> Read<Copied<'a>> for File<'static> {
     }
 }
 
-impl Read<fs::File> for File<'static> {
+impl Reader<fs::File> for File<'static> {
     type Error = Error;
 
     fn read(source: fs::File) -> Result<Self> {
@@ -621,7 +621,7 @@ impl<'a, 'b> IntoIterator for &'b mut Archive<'a> {
     }
 }
 
-impl<'a> Read<Borrowed<'a>> for Archive<'a> {
+impl<'a> Reader<Borrowed<'a>> for Archive<'a> {
     type Error = Error;
 
     fn read(source: Borrowed<'a>) -> Result<Self> {
@@ -630,7 +630,7 @@ impl<'a> Read<Borrowed<'a>> for Archive<'a> {
     }
 }
 
-impl<'a> Read<Copied<'a>> for Archive<'static> {
+impl<'a> Reader<Copied<'a>> for Archive<'static> {
     type Error = Error;
 
     fn read(source: Copied<'a>) -> Result<Self> {
@@ -639,7 +639,7 @@ impl<'a> Read<Copied<'a>> for Archive<'static> {
     }
 }
 
-impl Read<fs::File> for Archive<'static> {
+impl Reader<fs::File> for Archive<'static> {
     type Error = Error;
 
     fn read(source: fs::File) -> Result<Self> {
