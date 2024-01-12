@@ -533,29 +533,29 @@ impl<'a> File<'a> {
 }
 
 impl<'a> CompressableFrom<&'a [u8]> for File<'a> {
-    fn from_decompressed(value: &'a [u8]) -> Self {
-        Self {
-            bytes: CompressableByteContainer::from_borrowed(value, None),
-        }
-    }
-
     fn from_compressed(value: &'a [u8], decompressed_len: usize) -> Self {
         Self {
             bytes: CompressableByteContainer::from_borrowed(value, Some(decompressed_len)),
         }
     }
+
+    fn from_decompressed(value: &'a [u8]) -> Self {
+        Self {
+            bytes: CompressableByteContainer::from_borrowed(value, None),
+        }
+    }
 }
 
 impl CompressableFrom<Vec<u8>> for File<'static> {
-    fn from_decompressed(value: Vec<u8>) -> Self {
-        Self {
-            bytes: CompressableByteContainer::from_owned(value, None),
-        }
-    }
-
     fn from_compressed(value: Vec<u8>, decompressed_len: usize) -> Self {
         Self {
             bytes: CompressableByteContainer::from_owned(value, Some(decompressed_len)),
+        }
+    }
+
+    fn from_decompressed(value: Vec<u8>) -> Self {
+        Self {
+            bytes: CompressableByteContainer::from_owned(value, None),
         }
     }
 }

@@ -23,10 +23,10 @@ where
 
 pub trait CompressableFrom<T> {
     #[must_use]
-    fn from_decompressed(value: T) -> Self;
+    fn from_compressed(value: T, decompressed_len: usize) -> Self;
 
     #[must_use]
-    fn from_compressed(value: T, decompressed_len: usize) -> Self;
+    fn from_decompressed(value: T) -> Self;
 }
 
 pub use bstr::{BStr, BString};
