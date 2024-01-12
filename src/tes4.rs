@@ -501,15 +501,12 @@ impl<'a> File<'a> {
         }
     }
 
-    fn lz4f_prefs() -> Preferences {
-        PreferencesBuilder::new()
+    fn compress_into_lz4(&self, out: &mut Vec<u8>) -> Result<()> {
+        let prefs = PreferencesBuilder::new()
             .compression_level(9)
             .auto_flush(AutoFlush::Enabled)
-            .build()
-    }
-
-    fn compress_into_lz4(&self, out: &mut Vec<u8>) -> Result<()> {
-        lz4f::compress_to_vec(self.as_bytes(), out, &Self::lz4f_prefs())?;
+            .build();
+        lz4f::compress_to_vec(self.as_bytes(), out, &prefs)?;
         Ok(())
     }
 
