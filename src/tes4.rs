@@ -252,7 +252,7 @@ struct Header {
 
 impl Header {
     #[must_use]
-    fn endian(&self) -> Endian {
+    fn hash_endian(&self) -> Endian {
         if self.archive_flags.xbox_archive() {
             Endian::Big
         } else {
@@ -758,7 +758,7 @@ impl<'a> Archive<'a> {
     where
         I: ?Sized + Source<'a>,
     {
-        let hash = Self::read_hash(source, header.endian())?;
+        let hash = Self::read_hash(source, header.hash_endian())?;
         let file_count: u32 = source.read(Endian::Little)?;
         #[allow(clippy::cast_possible_wrap)]
         match header.version {
@@ -795,7 +795,7 @@ impl<'a> Archive<'a> {
     where
         I: ?Sized + Source<'a>,
     {
-        let hash = Self::read_hash(source, header.endian())?;
+        let hash = Self::read_hash(source, header.hash_endian())?;
         let (compression_flipped, mut data_size, data_offset) = {
             let (size, offset): (u32, u32) = source.read(Endian::Little)?;
             (
