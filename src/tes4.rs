@@ -226,9 +226,9 @@ mod constants {
     pub const BSA: u32 = cc::make_four(b"BSA");
 
     pub const HEADER_SIZE: u32 = 0x24;
-    pub const DIRECTORY_ENTRY_SIZE_X86: u32 = 0x10;
-    pub const DIRECTORY_ENTRY_SIZE_X64: u32 = 0x18;
-    pub const FILE_ENTRY_SIZE: u32 = 0x10;
+    pub const DIRECTORY_ENTRY_SIZE_X86: usize = 0x10;
+    pub const DIRECTORY_ENTRY_SIZE_X64: usize = 0x18;
+    pub const FILE_ENTRY_SIZE: usize = 0x10;
 
     pub const FILE_FLAG_COMPRESSION: u32 = 1 << 30;
     pub const FILE_FLAG_CHECKED: u32 = 1 << 31;
@@ -262,25 +262,26 @@ impl Header {
 
     #[must_use]
     fn compute_offsets(&self) -> Offsets {
-        let directory_entries = constants::HEADER_SIZE;
         let file_entries = {
+            let directory_entries = constants::HEADER_SIZE as usize;
             let directory_entry_size = match self.version {
                 Version::TES4 | Version::FO3 => constants::DIRECTORY_ENTRY_SIZE_X86,
                 Version::SSE => constants::DIRECTORY_ENTRY_SIZE_X64,
             };
-            directory_entries + (directory_entry_size * self.directory_count)
+            directory_entries + (directory_entry_size * self.directory_count as usize)
         };
         let file_names = {
             let directory_names_len = if self.archive_flags.directory_strings() {
-                self.directory_names_len
+                self.directory_names_len as usize
             } else {
                 0
             };
-            file_entries + (directory_names_len + constants::FILE_ENTRY_SIZE * self.file_count)
+            file_entries
+                + (directory_names_len + constants::FILE_ENTRY_SIZE * self.file_count as usize)
         };
         Offsets {
-            file_entries: file_entries as usize,
-            file_names: file_names as usize,
+            file_entries,
+            file_names,
         }
     }
 }

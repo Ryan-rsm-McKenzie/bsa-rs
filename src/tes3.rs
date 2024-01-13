@@ -24,17 +24,17 @@ pub enum Error {
 pub type Result<T> = core::result::Result<T, Error>;
 
 mod constants {
-    pub const FILE_ENTRY_SIZE: u32 = 0x8;
-    pub const HASH_SIZE: u32 = 0x8;
+    pub const FILE_ENTRY_SIZE: usize = 0x8;
+    pub const HASH_SIZE: usize = 0x8;
     pub const HEADER_MAGIC: u32 = 0x100;
-    pub const HEADER_SIZE: u32 = 0xC;
+    pub const HEADER_SIZE: usize = 0xC;
 }
 
 struct Offsets {
-    name_offsets: u32,
-    names: u32,
-    hashes: u32,
-    file_data: u32,
+    name_offsets: usize,
+    names: usize,
+    hashes: usize,
+    file_data: usize,
 }
 
 struct Header {
@@ -45,10 +45,11 @@ struct Header {
 impl Header {
     #[must_use]
     fn compute_offsets(&self) -> Offsets {
-        let name_offsets = constants::HEADER_SIZE + constants::FILE_ENTRY_SIZE * self.file_count;
-        let names = name_offsets + 0x4 * self.file_count;
-        let hashes = constants::HEADER_SIZE + self.hash_offset;
-        let file_data = hashes + constants::HASH_SIZE * self.file_count;
+        let file_count = self.file_count as usize;
+        let name_offsets = constants::HEADER_SIZE + constants::FILE_ENTRY_SIZE * file_count;
+        let names = name_offsets + 0x4 * file_count;
+        let hashes = constants::HEADER_SIZE + self.hash_offset as usize;
+        let file_data = hashes + constants::HASH_SIZE * file_count;
         Offsets {
             name_offsets,
             names,
@@ -271,7 +272,7 @@ impl<'a> Archive<'a> {
         let offsets = header.compute_offsets();
         let mut map = ArchiveMap::default();
 
-        for i in 0..header.file_count {
+        for i in 0..header.file_count as usize {
             let (key, value) = Self::read_file(source, i, &offsets)?;
             map.insert(key, value);
         }
@@ -279,26 +280,26 @@ impl<'a> Archive<'a> {
         Ok(Self { map })
     }
 
-    fn read_file<I>(source: &mut I, idx: u32, offsets: &Offsets) -> Result<(ArchiveKey, File<'a>)>
+    fn read_file<I>(source: &mut I, idx: usize, offsets: &Offsets) -> Result<(ArchiveKey, File<'a>)>
     where
         I: ?Sized + Source<'a>,
     {
         let hash = source.save_restore_position(|source| -> Result<Hash> {
-            source.seek_absolute((offsets.hashes + constants::HASH_SIZE * idx) as usize)?;
+            source.seek_absolute(offsets.hashes + constants::HASH_SIZE * idx)?;
             Self::read_hash(source)
         })??;
 
         let name = source.save_restore_position(|source| -> Result<BString> {
-            source.seek_absolute((offsets.name_offsets + 0x4 * idx) as usize)?;
+            source.seek_absolute(offsets.name_offsets + 0x4 * idx)?;
             let offset: u32 = source.read(Endian::Little)?;
-            source.seek_absolute((offsets.names + offset) as usize)?;
+            source.seek_absolute(offsets.names + offset as usize)?;
             let name = source.read_protocol::<ZString>(Endian::Little)?;
             Ok(name)
         })??;
 
         let (size, offset): (u32, u32) = source.read(Endian::Little)?;
         let container = source.save_restore_position(|source| -> Result<ByteContainer<'a>> {
-            source.seek_absolute((offsets.file_data + offset) as usize)?;
+            source.seek_absolute(offsets.file_data + offset as usize)?;
             let result = source.read_container(size as usize)?;
             Ok(result)
         })??;
