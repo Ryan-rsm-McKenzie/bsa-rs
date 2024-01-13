@@ -1,6 +1,12 @@
-use crate::{containers::CompressableByteContainer, derive, io::Source, CompressableFrom};
+use crate::{
+    containers::CompressableByteContainer,
+    derive,
+    io::{Endian, Source},
+    strings::{self, BZString, ZString},
+    CompressableFrom,
+};
 use bstr::BString;
-use core::num::TryFromIntError;
+use core::{mem, num::TryFromIntError};
 use flate2::{
     write::{ZlibDecoder, ZlibEncoder},
     Compression,
@@ -44,6 +50,15 @@ pub enum Error {
     #[error(transparent)]
     IntegralTruncation(#[from] TryFromIntError),
 
+    #[error("invalid header size read from file header: {0}")]
+    InvalidHeaderSize(u32),
+
+    #[error("invalid magic read from file header: {0}")]
+    InvalidMagic(u32),
+
+    #[error("invalid version read from file header: {0}")]
+    InvalidVersion(u32),
+
     #[error(transparent)]
     Io(#[from] io::Error),
 
@@ -52,6 +67,138 @@ pub enum Error {
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
+
+bitflags::bitflags! {
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+    pub struct ArchiveFlags: u32 {
+        const DIRECTORY_STRINGS = 1 << 0;
+        const FILE_STRINGS = 1 << 1;
+        const COMPRESSED = 1 << 2;
+        const RETAIN_DIRECTORY_NAMES = 1 << 3;
+        const RETAIN_FILE_NAMES = 1 << 4;
+        const RETAIN_FILE_NAME_OFFSETS = 1 << 5;
+        const XBOX_ARCHIVE = 1 << 6;
+        const RETAIN_STRINGS_DURING_STARTUP = 1 << 7;
+        const EMBEDDED_FILE_NAMES = 1 << 8;
+        const XBOX_COMPRESSED = 1 << 9;
+    }
+}
+
+impl ArchiveFlags {
+    #[must_use]
+    pub fn directory_strings(&self) -> bool {
+        self.contains(Self::DIRECTORY_STRINGS)
+    }
+
+    #[must_use]
+    pub fn file_strings(&self) -> bool {
+        self.contains(Self::FILE_STRINGS)
+    }
+
+    #[must_use]
+    pub fn compressed(&self) -> bool {
+        self.contains(Self::COMPRESSED)
+    }
+
+    #[must_use]
+    pub fn retain_directory_names(&self) -> bool {
+        self.contains(Self::RETAIN_DIRECTORY_NAMES)
+    }
+
+    #[must_use]
+    pub fn retain_file_names(&self) -> bool {
+        self.contains(Self::RETAIN_FILE_NAMES)
+    }
+
+    #[must_use]
+    pub fn retain_file_name_offsets(&self) -> bool {
+        self.contains(Self::RETAIN_FILE_NAME_OFFSETS)
+    }
+
+    #[must_use]
+    pub fn xbox_archive(&self) -> bool {
+        self.contains(Self::XBOX_ARCHIVE)
+    }
+
+    #[must_use]
+    pub fn retain_strings_during_startup(&self) -> bool {
+        self.contains(Self::RETAIN_STRINGS_DURING_STARTUP)
+    }
+
+    #[must_use]
+    pub fn embedded_file_names(&self) -> bool {
+        self.contains(Self::EMBEDDED_FILE_NAMES)
+    }
+
+    #[must_use]
+    pub fn xbox_compressed(&self) -> bool {
+        self.contains(Self::XBOX_COMPRESSED)
+    }
+}
+
+bitflags::bitflags! {
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+    pub struct ArchiveTypes: u16 {
+        const MESHES = 1 << 0;
+        const TEXTURES = 1 << 1;
+        const MENUS = 1 << 2;
+        const SOUNDS = 1 << 3;
+        const VOICES = 1 << 4;
+        const SHADERS = 1 << 5;
+        const TREES = 1 << 6;
+        const FONTS = 1 << 7;
+        const MISC = 1 << 8;
+    }
+}
+
+impl ArchiveTypes {
+    #[must_use]
+    pub fn meshes(&self) -> bool {
+        self.contains(Self::MESHES)
+    }
+
+    #[must_use]
+    pub fn textures(&self) -> bool {
+        self.contains(Self::TEXTURES)
+    }
+
+    #[must_use]
+    pub fn menus(&self) -> bool {
+        self.contains(Self::MENUS)
+    }
+
+    #[must_use]
+    pub fn sounds(&self) -> bool {
+        self.contains(Self::SOUNDS)
+    }
+
+    #[must_use]
+    pub fn voices(&self) -> bool {
+        self.contains(Self::VOICES)
+    }
+
+    #[must_use]
+    pub fn shaders(&self) -> bool {
+        self.contains(Self::SHADERS)
+    }
+
+    #[must_use]
+    pub fn trees(&self) -> bool {
+        self.contains(Self::TREES)
+    }
+
+    #[must_use]
+    pub fn fonts(&self) -> bool {
+        self.contains(Self::FONTS)
+    }
+
+    #[must_use]
+    pub fn misc(&self) -> bool {
+        self.contains(Self::MISC)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum CompressionCodec {
@@ -73,8 +220,73 @@ impl Version {
     pub const TES5: Version = Version::FO3;
 }
 
+mod constants {
+    use crate::cc;
+
+    pub const BSA: u32 = cc::make_four(b"BSA");
+
+    pub const HEADER_SIZE: u32 = 0x24;
+    pub const DIRECTORY_ENTRY_SIZE_X86: u32 = 0x10;
+    pub const DIRECTORY_ENTRY_SIZE_X64: u32 = 0x18;
+    pub const FILE_ENTRY_SIZE: u32 = 0x10;
+
+    pub const FILE_FLAG_COMPRESSION: u32 = 1 << 30;
+    pub const FILE_FLAG_CHECKED: u32 = 1 << 31;
+    pub const FILE_FLAG_SECONDARY_ARCHIVE: u32 = 1 << 31;
+}
+
+struct Offsets {
+    file_entries: usize,
+    file_names: usize,
+}
+
+struct Header {
+    version: Version,
+    archive_flags: ArchiveFlags,
+    directory_count: u32,
+    file_count: u32,
+    directory_names_len: u32,
+    file_names_len: u32,
+    archive_types: ArchiveTypes,
+}
+
+impl Header {
+    #[must_use]
+    fn endian(&self) -> Endian {
+        if self.archive_flags.xbox_archive() {
+            Endian::Big
+        } else {
+            Endian::Little
+        }
+    }
+
+    #[must_use]
+    fn compute_offsets(&self) -> Offsets {
+        let directory_entries = constants::HEADER_SIZE;
+        let file_entries = {
+            let directory_entry_size = match self.version {
+                Version::TES4 | Version::FO3 => constants::DIRECTORY_ENTRY_SIZE_X86,
+                Version::SSE => constants::DIRECTORY_ENTRY_SIZE_X64,
+            };
+            directory_entries + (directory_entry_size * self.directory_count)
+        };
+        let file_names = {
+            let directory_names_len = if self.archive_flags.directory_strings() {
+                self.directory_names_len
+            } else {
+                0
+            };
+            file_entries + (directory_names_len + constants::FILE_ENTRY_SIZE * self.file_count)
+        };
+        Offsets {
+            file_entries: file_entries as usize,
+            file_names: file_names as usize,
+        }
+    }
+}
+
 pub mod hashing {
-    use crate::hashing as detail;
+    use crate::{cc, hashing as detail};
     use bstr::{BStr, BString, ByteSlice as _};
     use core::cmp::Ordering;
 
@@ -134,18 +346,6 @@ pub mod hashing {
     }
 
     #[must_use]
-    const fn make_four_cc(cc: &[u8]) -> u32 {
-        let buffer = match cc.len() {
-            0 => [0, 0, 0, 0],
-            1 => [cc[0], 0, 0, 0],
-            2 => [cc[0], cc[1], 0, 0],
-            3 => [cc[0], cc[1], cc[2], 0],
-            _ => [cc[0], cc[1], cc[2], cc[3]],
-        };
-        u32::from_le_bytes(buffer)
-    }
-
-    #[must_use]
     pub fn hash_directory(path: &BStr) -> (Hash, BString) {
         let mut path = BString::new(path.to_vec());
         (hash_directory_in_place(&mut path), path)
@@ -187,12 +387,12 @@ pub mod hashing {
     #[must_use]
     pub fn hash_file_in_place(path: &mut BString) -> Hash {
         const LUT: [u32; 6] = [
-            make_four_cc(b""),
-            make_four_cc(b".nif"),
-            make_four_cc(b".kf"),
-            make_four_cc(b".dds"),
-            make_four_cc(b".wav"),
-            make_four_cc(b".adp"),
+            cc::make_four(b""),
+            cc::make_four(b".nif"),
+            cc::make_four(b".kf"),
+            cc::make_four(b".dds"),
+            cc::make_four(b".wav"),
+            cc::make_four(b".adp"),
         ];
 
         detail::normalize_path(path);
@@ -211,7 +411,7 @@ pub mod hashing {
             let mut h = hash_directory(stem.as_bstr()).0;
             h.crc = u32::wrapping_add(h.crc, crc32(extension));
 
-            let cc = make_four_cc(extension);
+            let cc = cc::make_four(extension);
             // truncations are on purpose
             #[allow(clippy::cast_possible_truncation)]
             if let Some(i) = LUT.iter().position(|&x| x == cc) {
@@ -229,19 +429,8 @@ pub mod hashing {
 
     #[cfg(test)]
     mod tests {
-        use super::{hash_directory, hash_file, make_four_cc};
+        use super::{hash_directory, hash_file};
         use bstr::ByteSlice as _;
-
-        #[test]
-        fn four_cc() -> anyhow::Result<()> {
-            assert_eq!(make_four_cc(b""), 0x00000000);
-            assert_eq!(make_four_cc(b"A"), 0x00000041);
-            assert_eq!(make_four_cc(b"AB"), 0x00004241);
-            assert_eq!(make_four_cc(b"ABC"), 0x00434241);
-            assert_eq!(make_four_cc(b"ABCD"), 0x44434241);
-            assert_eq!(make_four_cc(b"ABCDE"), 0x44434241);
-            Ok(())
-        }
 
         #[test]
         fn validate_directory_hashes() {
@@ -456,7 +645,7 @@ impl<'a> File<'a> {
         Ok(())
     }
 
-    #[must_use]
+    #[allow(clippy::unnecessary_wraps)]
     fn do_read<I>(stream: &mut I) -> Result<Self>
     where
         I: ?Sized + Source<'a>,
@@ -549,6 +738,217 @@ impl<'a> Archive<'a> {
     where
         I: ?Sized + Source<'a>,
     {
-        todo!()
+        let header = Self::read_header(source)?;
+        let mut offsets = header.compute_offsets();
+        let mut map = ArchiveMap::default();
+
+        for _ in 0..header.directory_count {
+            let (key, value) = Self::read_directory(source, &header, &mut offsets)?;
+            map.insert(key, value);
+        }
+
+        Ok(Self { map })
+    }
+
+    fn read_directory<I>(
+        source: &mut I,
+        header: &Header,
+        offsets: &mut Offsets,
+    ) -> Result<(ArchiveKey, Directory<'a>)>
+    where
+        I: ?Sized + Source<'a>,
+    {
+        let hash = Self::read_hash(source, header.endian())?;
+        let file_count: u32 = source.read(Endian::Little)?;
+        #[allow(clippy::cast_possible_wrap)]
+        match header.version {
+            Version::TES4 | Version::FO3 => source.seek_relative(mem::size_of::<u32>() as isize)?,
+            Version::SSE => source.seek_relative((mem::size_of::<u32>() * 3) as isize)?,
+        }
+
+        let mut map = DirectoryMap::default();
+        let (name, directory) =
+            source.save_restore_position(|source| -> Result<(BString, Directory<'a>)> {
+                source.seek_absolute(offsets.file_entries)?;
+                let mut name = if header.archive_flags.directory_strings() {
+                    Some(source.read_protocol::<BZString>(Endian::Little)?)
+                } else {
+                    None
+                };
+                for _ in 0..file_count {
+                    let (key, value) = Self::read_file_entry(source, header, offsets, &mut name)?;
+                    map.insert(key, value);
+                }
+                offsets.file_entries = source.stream_position();
+                Ok((name.unwrap_or_default(), Directory { map }))
+            })??;
+
+        Ok((ArchiveKey { hash, name }, directory))
+    }
+
+    fn read_file_entry<I>(
+        source: &mut I,
+        header: &Header,
+        offsets: &mut Offsets,
+        directory_name: &mut Option<BString>,
+    ) -> Result<(DirectoryKey, File<'a>)>
+    where
+        I: ?Sized + Source<'a>,
+    {
+        let hash = Self::read_hash(source, header.endian())?;
+        let (compression_flipped, mut data_size, data_offset) = {
+            let (size, offset): (u32, u32) = source.read(Endian::Little)?;
+            (
+                (size & constants::FILE_FLAG_COMPRESSION) != 0,
+                (size & !(constants::FILE_FLAG_COMPRESSION | constants::FILE_FLAG_CHECKED))
+                    as usize,
+                (offset & !constants::FILE_FLAG_SECONDARY_ARCHIVE) as usize,
+            )
+        };
+
+        let mut name = if header.archive_flags.file_strings() {
+            source.save_restore_position(|source| -> Result<Option<BString>> {
+                source.seek_absolute(offsets.file_names)?;
+                let result = source.read_protocol::<ZString>(Endian::Little)?;
+                offsets.file_names = source.stream_position();
+                Ok(Some(result))
+            })??
+        } else {
+            None
+        };
+
+        source.seek_absolute(data_offset)?;
+        if header.archive_flags.embedded_file_names() {
+            let mut s = source.read_protocol::<strings::BString>(Endian::Little)?;
+            data_size -= s.len() + 1; // include prefix byte
+            if let Some(pos) = s.iter().rposition(|&x| x == b'\\' || x == b'/') {
+                if directory_name.is_none() {
+                    *directory_name = Some(BString::from(&s[..pos]));
+                }
+                s.drain(..=pos);
+            }
+            if name.is_none() {
+                name = Some(s);
+            }
+        }
+
+        let decompressed_len = match (header.archive_flags.compressed(), compression_flipped) {
+            (true, false) | (false, true) => {
+                let result: u32 = source.read(Endian::Little)?;
+                data_size -= mem::size_of::<u32>();
+                Some(result as usize)
+            }
+            (true, true) | (false, false) => None,
+        };
+        let container = source
+            .read_container(data_size)?
+            .into_compressable(decompressed_len);
+
+        Ok((
+            DirectoryKey {
+                hash,
+                name: name.unwrap_or_default(),
+            },
+            File { container },
+        ))
+    }
+
+    fn read_hash<I>(source: &mut I, endian: Endian) -> Result<Hash>
+    where
+        I: ?Sized + Source<'a>,
+    {
+        let (last, last2, length, first, crc) = source.read(endian)?;
+        Ok(Hash {
+            last,
+            last2,
+            length,
+            first,
+            crc,
+        })
+    }
+
+    fn read_header<I>(source: &mut I) -> Result<Header>
+    where
+        I: ?Sized + Source<'a>,
+    {
+        let (
+            magic,
+            version,
+            header_size,
+            archive_flags,
+            directory_count,
+            file_count,
+            directory_names_len,
+            file_names_len,
+            archive_types,
+            padding,
+        ) = source.read(Endian::Little)?;
+        let _: u16 = padding;
+
+        if magic != constants::BSA {
+            return Err(Error::InvalidMagic(magic));
+        }
+
+        let version = match version {
+            103 => Version::TES4,
+            104 => Version::FO3,
+            105 => Version::SSE,
+            _ => return Err(Error::InvalidVersion(version)),
+        };
+
+        if header_size != constants::HEADER_SIZE {
+            return Err(Error::InvalidHeaderSize(header_size));
+        }
+
+        // there probably exist "valid" archives which set extra bits, so it's not worth validating...
+        let archive_flags = ArchiveFlags::from_bits_truncate(archive_flags);
+        let archive_types = ArchiveTypes::from_bits_truncate(archive_types);
+
+        Ok(Header {
+            version,
+            archive_flags,
+            directory_count,
+            file_count,
+            directory_names_len,
+            file_names_len,
+            archive_types,
+        })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    mod file {
+        use crate::{prelude::*, tes4::File};
+
+        #[test]
+        fn default_state() {
+            let f = File::new();
+            assert!(!f.is_compressed());
+            assert!(f.is_empty());
+            assert_eq!(f.len(), 0);
+            assert_eq!(f.as_bytes().len(), 0);
+        }
+
+        #[test]
+        fn assign_state() {
+            let payload = [0u8; 64];
+            let f = File::from_decompressed(&payload[..]);
+            assert_eq!(f.len(), payload.len());
+            assert_eq!(f.as_ptr(), payload.as_ptr());
+            assert_eq!(f.as_bytes().len(), payload.len());
+            assert_eq!(f.as_bytes().as_ptr(), payload.as_ptr());
+        }
+    }
+
+    mod directory {
+        use crate::tes4::Directory;
+
+        #[test]
+        fn default_state() {
+            let d = Directory::new();
+            assert!(d.is_empty());
+            assert!(d.len() == 0);
+        }
     }
 }

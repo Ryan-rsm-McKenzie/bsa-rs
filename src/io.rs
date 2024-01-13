@@ -9,7 +9,6 @@ use std::{
 
 pub enum Endian {
     Little,
-    #[allow(dead_code)]
     Big,
     #[allow(dead_code)]
     Native,
@@ -50,6 +49,14 @@ pub trait Source<'a> {
         let result = f(self);
         self.seek_absolute(position)?;
         Ok(result)
+    }
+
+    fn seek_relative(&mut self, offset: isize) -> io::Result<()> {
+        if let Some(pos) = self.stream_position().checked_add_signed(offset) {
+            self.seek_absolute(pos)
+        } else {
+            Err(io::Error::from(io::ErrorKind::UnexpectedEof))
+        }
     }
 }
 

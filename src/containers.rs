@@ -241,22 +241,6 @@ impl CompressableByteContainer<'static> {
             },
         }
     }
-
-    #[must_use]
-    pub fn from_mapped(
-        pos: usize,
-        len: usize,
-        mapping: Arc<Mmap>,
-        decompressed_len: Option<usize>,
-    ) -> Self {
-        let mapping = Mapping { pos, len, mapping };
-        Self {
-            inner: match decompressed_len {
-                Some(len) => MappedCompressed(mapping, len),
-                None => MappedDecompressed(mapping),
-            },
-        }
-    }
 }
 
 impl<'a> Default for CompressableByteContainer<'a> {

@@ -14,7 +14,7 @@ pub enum Error {
     #[error(transparent)]
     IntegralTruncation(#[from] TryFromIntError),
 
-    #[error("invalid magic read from file header")]
+    #[error("invalid magic read from file header: {0}")]
     InvalidMagic(u32),
 
     #[error(transparent)]
@@ -208,7 +208,7 @@ impl<'a> File<'a> {
         Ok(())
     }
 
-    #[must_use]
+    #[allow(clippy::unnecessary_wraps)]
     fn do_read<I>(stream: &mut I) -> Result<Self>
     where
         I: ?Sized + Source<'a>,
@@ -216,11 +216,6 @@ impl<'a> File<'a> {
         Ok(Self {
             container: stream.read_to_end(),
         })
-    }
-
-    #[must_use]
-    fn from_container(bytes: ByteContainer<'a>) -> Self {
-        Self { container: bytes }
     }
 }
 
@@ -277,18 +272,14 @@ impl<'a> Archive<'a> {
         let mut map = ArchiveMap::default();
 
         for i in 0..header.file_count {
-            let (hash, name, file) = Self::read_file(source, i, &offsets)?;
-            map.insert(ArchiveKey { hash, name }, file);
+            let (key, value) = Self::read_file(source, i, &offsets)?;
+            map.insert(key, value);
         }
 
         Ok(Self { map })
     }
 
-    fn read_file<I>(
-        source: &mut I,
-        idx: u32,
-        offsets: &Offsets,
-    ) -> Result<(Hash, BString, File<'a>)>
+    fn read_file<I>(source: &mut I, idx: u32, offsets: &Offsets) -> Result<(ArchiveKey, File<'a>)>
     where
         I: ?Sized + Source<'a>,
     {
@@ -306,14 +297,13 @@ impl<'a> Archive<'a> {
         })??;
 
         let (size, offset): (u32, u32) = source.read(Endian::Little)?;
-        let data = source.save_restore_position(|source| -> Result<ByteContainer<'a>> {
+        let container = source.save_restore_position(|source| -> Result<ByteContainer<'a>> {
             source.seek_absolute((offsets.file_data + offset) as usize)?;
             let result = source.read_container(size as usize)?;
             Ok(result)
         })??;
 
-        let file = File::from_container(data);
-        Ok((hash, name, file))
+        Ok((ArchiveKey { hash, name }, File { container }))
     }
 
     fn read_hash<I>(source: &mut I) -> Result<Hash>
