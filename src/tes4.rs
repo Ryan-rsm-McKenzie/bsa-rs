@@ -14,27 +14,6 @@ use flate2::{
 use lzzzz::lz4f::{self, AutoFlush, PreferencesBuilder};
 use std::io::{self, Write};
 
-pub mod errors {
-    use core::fmt::{self, Display, Formatter};
-    use std::error;
-
-    #[derive(Clone, Copy, Debug)]
-    pub struct DecompressionSizeMismatch {
-        pub expected: usize,
-        pub actual: usize,
-    }
-
-    impl Display for DecompressionSizeMismatch {
-        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-            write!(f, "buffer failed to decompress to the expected size... expected {} bytes, but got {} bytes", self.expected, self.actual)
-        }
-    }
-
-    impl error::Error for DecompressionSizeMismatch {}
-}
-
-use errors::DecompressionSizeMismatch;
-
 #[non_exhaustive]
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -44,8 +23,8 @@ pub enum Error {
     #[error("can not decompress the given file because it is already decompressed")]
     AlreadyDecompressed,
 
-    #[error(transparent)]
-    DecompressionSizeMismatch(#[from] errors::DecompressionSizeMismatch),
+    #[error("buffer failed to decompress to the expected size... expected {expected} bytes, but got {actual} bytes")]
+    DecompressionSizeMismatch { expected: usize, actual: usize },
 
     #[error(transparent)]
     IntegralTruncation(#[from] TryFromIntError),
@@ -609,10 +588,10 @@ impl<'a> File<'a> {
         if out_len == decompressed_len {
             Ok(())
         } else {
-            Err(Error::from(DecompressionSizeMismatch {
+            Err(Error::DecompressionSizeMismatch {
                 expected: decompressed_len,
                 actual: out_len,
-            }))
+            })
         }
     }
 
