@@ -225,7 +225,6 @@ struct Header {
     directory_count: u32,
     file_count: u32,
     directory_names_len: u32,
-    file_names_len: u32,
     archive_types: ArchiveTypes,
 }
 
@@ -508,27 +507,8 @@ use hashing::Hash;
 
 #[derive(Clone, Copy, Default)]
 pub struct CompressionOptions {
-    version: Version,
-    compression_codec: CompressionCodec,
-}
-
-impl CompressionOptions {
-    #[must_use]
-    pub fn build(self) -> Self {
-        self
-    }
-
-    #[must_use]
-    pub fn compression_codec(&mut self, compression_codec: CompressionCodec) -> &mut Self {
-        self.compression_codec = compression_codec;
-        self
-    }
-
-    #[must_use]
-    pub fn version(&mut self, version: Version) -> &mut Self {
-        self.version = version;
-        self
-    }
+    pub version: Version,
+    pub compression_codec: CompressionCodec,
 }
 
 #[derive(Default)]
@@ -536,7 +516,8 @@ pub struct File<'a> {
     container: CompressableByteContainer<'a>,
 }
 
-derive::container!(File);
+type FileReadResult<T> = T;
+derive::container!(File => FileReadResult);
 
 impl<'a> File<'a> {
     pub fn compress(&self, options: CompressionOptions) -> Result<File<'static>> {
@@ -711,10 +692,18 @@ impl ArchiveKey {
     }
 }
 
-derive::archive!(Archive, ArchiveMap: ArchiveKey => Directory);
+#[derive(Clone, Copy, Default)]
+pub struct ArchiveOptions {
+    pub version: Version,
+    pub flags: ArchiveFlags,
+    pub types: ArchiveTypes,
+}
+
+type ArchiveReadResult<T> = (T, ArchiveOptions);
+derive::archive!(Archive => ArchiveReadResult, ArchiveMap: ArchiveKey => Directory);
 
 impl<'a> Archive<'a> {
-    fn do_read<I>(source: &mut I) -> Result<Self>
+    fn do_read<I>(source: &mut I) -> Result<ArchiveReadResult<Self>>
     where
         I: ?Sized + Source<'a>,
     {
@@ -727,7 +716,14 @@ impl<'a> Archive<'a> {
             map.insert(key, value);
         }
 
-        Ok(Self { map })
+        Ok((
+            Self { map },
+            ArchiveOptions {
+                version: header.version,
+                flags: header.archive_flags,
+                types: header.archive_types,
+            },
+        ))
     }
 
     fn read_directory<I>(
@@ -863,6 +859,7 @@ impl<'a> Archive<'a> {
             archive_types,
             padding,
         ) = source.read(Endian::Little)?;
+        let _: u32 = file_names_len;
         let _: u16 = padding;
 
         if magic != constants::BSA {
@@ -890,7 +887,6 @@ impl<'a> Archive<'a> {
             directory_count,
             file_count,
             directory_names_len,
-            file_names_len,
             archive_types,
         })
     }

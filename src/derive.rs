@@ -1,9 +1,10 @@
 macro_rules! reader {
-    ($this:ident) => {
+    ($this:ident => $result:ident) => {
         impl<'a> crate::Reader<crate::Borrowed<'a>> for $this<'a> {
             type Error = Error;
+            type Item = $result<$this<'a>>;
 
-            fn read(source: crate::Borrowed<'a>) -> Result<Self> {
+            fn read(source: crate::Borrowed<'a>) -> Result<Self::Item> {
                 let mut source = crate::io::BorrowedSource::from(source.0);
                 Self::do_read(&mut source)
             }
@@ -11,8 +12,9 @@ macro_rules! reader {
 
         impl<'a> crate::Reader<crate::Copied<'a>> for $this<'static> {
             type Error = Error;
+            type Item = $result<$this<'static>>;
 
-            fn read(source: crate::Copied<'a>) -> Result<Self> {
+            fn read(source: crate::Copied<'a>) -> Result<Self::Item> {
                 let mut source = crate::io::CopiedSource::from(source.0);
                 Self::do_read(&mut source)
             }
@@ -20,8 +22,9 @@ macro_rules! reader {
 
         impl crate::Reader<&::std::fs::File> for $this<'static> {
             type Error = Error;
+            type Item = $result<$this<'static>>;
 
-            fn read(source: &::std::fs::File) -> Result<Self> {
+            fn read(source: &::std::fs::File) -> Result<Self::Item> {
                 let mut source = crate::io::MappedSource::try_from(source)?;
                 Self::do_read(&mut source)
             }
@@ -32,8 +35,8 @@ macro_rules! reader {
 pub(crate) use reader;
 
 macro_rules! container {
-    ($this:ident) => {
-        crate::derive::reader!($this);
+    ($this:ident => $result:ident) => {
+        crate::derive::reader!($this => $result);
 
         impl<'a> $this<'a> {
             #[must_use]
@@ -239,9 +242,9 @@ macro_rules! mapping {
 pub(crate) use mapping;
 
 macro_rules! archive {
-	($this:ident, $mapping:ident: $key:ty => $value:ident) => {
+	($this:ident => $result:ident, $mapping:ident: $key:ty => $value:ident) => {
 		crate::derive::mapping!($this, $mapping: $key => $value);
-		crate::derive::reader!($this);
+		crate::derive::reader!($this => $result);
 	};
 }
 

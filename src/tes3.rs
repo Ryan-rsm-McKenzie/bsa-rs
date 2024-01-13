@@ -198,7 +198,8 @@ pub struct File<'a> {
     container: ByteContainer<'a>,
 }
 
-derive::container!(File);
+type FileReadResult<T> = T;
+derive::container!(File => FileReadResult);
 
 impl<'a> File<'a> {
     pub fn write<O>(&self, stream: &mut O) -> Result<()>
@@ -245,7 +246,8 @@ impl ArchiveKey {
     }
 }
 
-derive::archive!(Archive, ArchiveMap: ArchiveKey => File);
+type ArchiveReadResult<T> = T;
+derive::archive!(Archive => ArchiveReadResult, ArchiveMap: ArchiveKey => File);
 
 impl<'a> Archive<'a> {
     pub fn write<O>(&self, stream: &mut O) -> Result<()>

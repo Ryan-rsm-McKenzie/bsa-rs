@@ -19,8 +19,9 @@ where
     Self: Sized,
 {
     type Error;
+    type Item;
 
-    fn read(source: T) -> core::result::Result<Self, Self::Error>;
+    fn read(source: T) -> core::result::Result<Self::Item, Self::Error>;
 }
 
 pub trait CompressableFrom<T> {
