@@ -55,7 +55,7 @@ pub trait Source<'a> {
         if let Some(pos) = self.stream_position().checked_add_signed(offset) {
             self.seek_absolute(pos)
         } else {
-            Err(io::Error::from(io::ErrorKind::UnexpectedEof))
+            Err(io::ErrorKind::UnexpectedEof.into())
         }
     }
 }
@@ -68,7 +68,7 @@ macro_rules! make_sourceable {
                 let start = self.pos;
                 let stop = start + len;
                 if stop > self.source.len() {
-                    Err(io::Error::from(io::ErrorKind::UnexpectedEof))
+                    Err(io::ErrorKind::UnexpectedEof.into())
                 } else {
                     self.pos += len;
                     buf.copy_from_slice(&self.source[start..stop]);
@@ -80,7 +80,7 @@ macro_rules! make_sourceable {
                 let start = self.pos;
                 let stop = start + len;
                 if stop > self.source.len() {
-                    Err(io::Error::from(io::ErrorKind::UnexpectedEof))
+                    Err(io::ErrorKind::UnexpectedEof.into())
                 } else {
                     self.pos += len;
                     Ok(self.make_container(start..stop))
@@ -96,7 +96,7 @@ macro_rules! make_sourceable {
 
             fn seek_absolute(&mut self, pos: usize) -> io::Result<()> {
                 if pos > self.source.len() {
-                    Err(io::Error::from(io::ErrorKind::UnexpectedEof))
+                    Err(io::ErrorKind::UnexpectedEof.into())
                 } else {
                     self.pos = pos;
                     Ok(())
