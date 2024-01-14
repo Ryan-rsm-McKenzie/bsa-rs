@@ -435,11 +435,11 @@ impl<'a> Archive<'a> {
 mod tests {
     use crate::{
         prelude::*,
-        tes4::{self, Archive, File, FileCompressionOptions},
+        tes4::{self, Archive, ArchiveKey, DirectoryKey, Error, File, FileCompressionOptions},
     };
     use anyhow::Context as _;
-    use bstr::ByteSlice as _;
-    use std::{fs, path::Path};
+    use bstr::{BString, ByteSlice as _};
+    use std::{fs, io, path::Path};
 
     #[test]
     fn default_state() {
@@ -449,7 +449,7 @@ mod tests {
     }
 
     #[test]
-    fn read_v104_compressed() -> anyhow::Result<()> {
+    fn read_compressed() -> anyhow::Result<()> {
         let test = |file_name: &str| -> anyhow::Result<()> {
             let root = Path::new("data/tes4_compression_test");
 
@@ -468,7 +468,7 @@ mod tests {
             for file_name in files {
                 let path = root.join(file_name);
                 let directory = bsa
-                    .get(&tes4::hash_directory(b"".as_bstr()).0)
+                    .get(&tes4::hash_directory(b".".as_bstr()).0)
                     .with_context(|| format!("failed to get directory for: {file_name}"))?;
                 let compressed_from_archive = directory
                     .get(&tes4::hash_file(file_name.as_bytes().as_bstr()).0)
@@ -510,6 +510,112 @@ mod tests {
         test("test_104.bsa").context("v104")?;
         test("test_105.bsa").context("v105")?;
 
+        Ok(())
+    }
+
+    #[test]
+    fn xbox_decompressed() -> anyhow::Result<()> {
+        let root = Path::new("data/tes4_xbox_read_test");
+
+        let fd =
+            fs::File::open(root.join("normal.bsa")).context("failed to open normal archive")?;
+        let (normal, normal_options) =
+            Archive::read(&fd).context("failed to read normal archive")?;
+        assert!(!normal_options.flags.xbox_archive());
+        assert!(!normal_options.flags.xbox_compressed());
+        assert!(!normal_options.flags.compressed());
+
+        let fd = fs::File::open(root.join("xbox.bsa")).context("failed to open xbox archive")?;
+        let (xbox, xbox_options) = Archive::read(&fd).context("failed to read xbox archive")?;
+        assert!(xbox_options.flags.xbox_archive());
+        assert!(!xbox_options.flags.xbox_compressed());
+        assert!(!xbox_options.flags.compressed());
+
+        assert_eq!(normal.len(), xbox.len());
+        for (directory_normal, directory_xbox) in normal.iter().zip(xbox) {
+            assert_eq!(directory_normal.0.hash, directory_xbox.0.hash);
+            assert_eq!(directory_normal.0.name, directory_xbox.0.name);
+            assert_eq!(directory_normal.1.len(), directory_xbox.1.len());
+
+            for (file_normal, file_xbox) in directory_normal.1.iter().zip(directory_xbox.1) {
+                assert_eq!(file_normal.0.hash, file_xbox.0.hash);
+                assert_eq!(file_normal.0.name, file_xbox.0.name);
+                assert!(!file_normal.1.is_compressed());
+                assert!(!file_xbox.1.is_compressed());
+                assert_eq!(file_normal.1.len(), file_xbox.1.len());
+                assert_eq!(file_normal.1.as_bytes(), file_xbox.1.as_bytes());
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn file_compression_diverges_from_archive_compression() -> anyhow::Result<()> {
+        let root = Path::new("data/tes4_compression_mismatch_test");
+        let fd = fs::File::open(root.join("test.bsa")).context("failed to open archive")?;
+        let (bsa, options) = Archive::read(&fd).context("failed to read archive")?;
+        assert!(options.flags.compressed());
+
+        let files = ["License.txt", "SampleA.png"];
+        let directory = bsa
+            .get(&ArchiveKey::from(BString::from(b".")))
+            .context("failed to get root directory from archive")?;
+        assert_eq!(directory.len(), files.len());
+
+        for file_name in files {
+            let path = root.join(file_name);
+            let metadata = fs::metadata(&path)
+                .with_context(|| format!("failed to get metadata for file: {path:?}"))?;
+            let file = directory
+                .get(&DirectoryKey::from(BString::from(file_name.as_bytes())))
+                .with_context(|| format!("failed to get file from directory: {file_name}"))?;
+            assert!(!file.is_compressed());
+            assert_eq!(file.len() as u64, metadata.len());
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_magic() -> anyhow::Result<()> {
+        let path = Path::new("data/tes4_invalid_test/invalid_magic.bsa");
+        let fd = fs::File::open(path).context("failed to open archive")?;
+        let Err(Error::InvalidMagic(0x00324142)) = Archive::read(&fd) else {
+            anyhow::bail!("failure");
+        };
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_size() -> anyhow::Result<()> {
+        let path = Path::new("data/tes4_invalid_test/invalid_size.bsa");
+        let fd = fs::File::open(path).context("failed to open archive")?;
+        let Err(Error::InvalidHeaderSize(0xCC)) = Archive::read(&fd) else {
+            anyhow::bail!("failure");
+        };
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_version() -> anyhow::Result<()> {
+        let path = Path::new("data/tes4_invalid_test/invalid_version.bsa");
+        let fd = fs::File::open(path).context("failed to open archive")?;
+        let Err(Error::InvalidVersion(42)) = Archive::read(&fd) else {
+            anyhow::bail!("failure");
+        };
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_exhausted() -> anyhow::Result<()> {
+        let path = Path::new("data/tes4_invalid_test/invalid_exhausted.bsa");
+        let fd = fs::File::open(path).context("failed to open archive")?;
+        if let Err(Error::Io(error)) = Archive::read(&fd) {
+            assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+        } else {
+            anyhow::bail!("failure");
+        };
         Ok(())
     }
 }
