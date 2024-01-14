@@ -55,11 +55,10 @@ mod tests {
     use crate::tes3::File;
 
     #[test]
-    fn default_state() -> anyhow::Result<()> {
+    fn default_state() {
         let f = File::new();
         assert!(f.is_empty());
         assert!(f.len() == 0);
         assert!(f.as_bytes().is_empty());
-        Ok(())
     }
 }
