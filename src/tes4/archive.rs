@@ -13,7 +13,7 @@ use core::mem;
 
 bitflags::bitflags! {
     #[repr(transparent)]
-    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct Flags: u32 {
         const DIRECTORY_STRINGS = 1 << 0;
         const FILE_STRINGS = 1 << 1;
@@ -25,6 +25,12 @@ bitflags::bitflags! {
         const RETAIN_STRINGS_DURING_STARTUP = 1 << 7;
         const EMBEDDED_FILE_NAMES = 1 << 8;
         const XBOX_COMPRESSED = 1 << 9;
+    }
+}
+
+impl Default for Flags {
+    fn default() -> Self {
+        Self::DIRECTORY_STRINGS | Self::FILE_STRINGS
     }
 }
 
