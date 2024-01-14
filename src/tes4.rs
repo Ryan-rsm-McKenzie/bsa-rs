@@ -250,7 +250,10 @@ impl Header {
         };
         let file_names = {
             let directory_names_len = if self.archive_flags.directory_strings() {
-                self.directory_names_len as usize
+                // directory names are stored using a bzstring
+                // directory_names_len includes the length of the string + the null terminator,
+                // but not the prefix length byte, so we add directory_count to include it
+                self.directory_names_len as usize + self.directory_count as usize
             } else {
                 0
             };
@@ -793,32 +796,39 @@ impl<'a> Archive<'a> {
             None
         };
 
-        source.seek_absolute(data_offset)?;
-        if header.archive_flags.embedded_file_names() {
-            let mut s = source.read_protocol::<strings::BString>(Endian::Little)?;
-            data_size -= s.len() + 1; // include prefix byte
-            if let Some(pos) = s.iter().rposition(|&x| x == b'\\' || x == b'/') {
-                if directory_name.is_none() {
-                    *directory_name = Some(BString::from(&s[..pos]));
-                }
-                s.drain(..=pos);
-            }
-            if name.is_none() {
-                name = Some(s);
-            }
-        }
+        let container =
+            source.save_restore_position(|source| -> Result<CompressableByteContainer<'a>> {
+                source.seek_absolute(data_offset)?;
 
-        let decompressed_len = match (header.archive_flags.compressed(), compression_flipped) {
-            (true, false) | (false, true) => {
-                let result: u32 = source.read(Endian::Little)?;
-                data_size -= mem::size_of::<u32>();
-                Some(result as usize)
-            }
-            (true, true) | (false, false) => None,
-        };
-        let container = source
-            .read_container(data_size)?
-            .into_compressable(decompressed_len);
+                if header.archive_flags.embedded_file_names() {
+                    let mut s = source.read_protocol::<strings::BString>(Endian::Little)?;
+                    data_size -= s.len() + 1; // include prefix byte
+                    if let Some(pos) = s.iter().rposition(|&x| x == b'\\' || x == b'/') {
+                        if directory_name.is_none() {
+                            *directory_name = Some(BString::from(&s[..pos]));
+                        }
+                        s.drain(..=pos);
+                    }
+                    if name.is_none() {
+                        name = Some(s);
+                    }
+                }
+
+                let decompressed_len =
+                    match (header.archive_flags.compressed(), compression_flipped) {
+                        (true, false) | (false, true) => {
+                            let result: u32 = source.read(Endian::Little)?;
+                            data_size -= mem::size_of::<u32>();
+                            Some(result as usize)
+                        }
+                        (true, true) | (false, false) => None,
+                    };
+
+                let container = source
+                    .read_container(data_size)?
+                    .into_compressable(decompressed_len);
+                Ok(container)
+            })??;
 
         Ok((
             DirectoryKey {
