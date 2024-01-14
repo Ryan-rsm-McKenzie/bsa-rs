@@ -216,7 +216,7 @@ derive::key!(Key);
 impl Key {
     #[must_use]
     fn hash_in_place(name: &mut BString) -> Hash {
-        tes4::hash_file_in_place(name)
+        tes4::hash_directory_in_place(name)
     }
 }
 
