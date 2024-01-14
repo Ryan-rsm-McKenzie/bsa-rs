@@ -326,18 +326,21 @@ impl<'a> Archive<'a> {
             source.save_restore_position(|source| -> Result<CompressableByteContainer<'a>> {
                 source.seek_absolute(data_offset)?;
 
-                if header.archive_flags.embedded_file_names() {
-                    let mut s = source.read_protocol::<strings::BString>(Endian::Little)?;
-                    data_size -= s.len() + 1; // include prefix byte
-                    if let Some(pos) = s.iter().rposition(|&x| x == b'\\' || x == b'/') {
-                        if directory_name.is_none() {
-                            *directory_name = Some(BString::from(&s[..pos]));
+                match header.version {
+                    Version::FO3 | Version::SSE if header.archive_flags.embedded_file_names() => {
+                        let mut s = source.read_protocol::<strings::BString>(Endian::Little)?;
+                        data_size -= s.len() + 1; // include prefix byte
+                        if let Some(pos) = s.iter().rposition(|&x| x == b'\\' || x == b'/') {
+                            if directory_name.is_none() {
+                                *directory_name = Some(BString::from(&s[..pos]));
+                            }
+                            s.drain(..=pos);
                         }
-                        s.drain(..=pos);
+                        if name.is_none() {
+                            name = Some(s);
+                        }
                     }
-                    if name.is_none() {
-                        name = Some(s);
-                    }
+                    _ => (),
                 }
 
                 let decompressed_len =
