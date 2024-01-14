@@ -39,7 +39,7 @@ enum MalformedStringError {
     #[error("postfix null-terminator was missing from read string")]
     MissingNullTerminator,
 
-    #[error("the string is too large to be written without data loss")]
+    #[error("a string is too large to be written without data loss")]
     StringTooLarge,
 }
 
