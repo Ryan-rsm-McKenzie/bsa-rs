@@ -459,10 +459,7 @@ mod tests {
         let test = |file_name: &str| -> anyhow::Result<()> {
             let root = Path::new("data/tes4_compression_test");
 
-            let path = root.join(file_name);
-            let fd =
-                fs::File::open(&path).with_context(|| format!("failed to open file: {path:?}"))?;
-            let (bsa, options) = Archive::read(&fd)
+            let (bsa, options) = Archive::read(root.join(file_name).as_path())
                 .with_context(|| format!("failed to read archive: {file_name}"))?;
             let compression_options = {
                 let mut x = FileCompressionOptions::default();
@@ -489,9 +486,7 @@ mod tests {
                     as u64;
                 assert_eq!(decompressed_len, metadata.len());
 
-                let fd = fs::File::open(&path)
-                    .with_context(|| format!("failed to open file: {path:?}"))?;
-                let decompressed_from_disk = File::read(&fd)
+                let decompressed_from_disk = File::read(path.as_path())
                     .with_context(|| format!("failed to read file from disk: {path:?}"))?;
                 let compressed_from_disk = decompressed_from_disk
                     .compress(compression_options)
@@ -523,16 +518,14 @@ mod tests {
     fn xbox_decompressed() -> anyhow::Result<()> {
         let root = Path::new("data/tes4_xbox_read_test");
 
-        let fd =
-            fs::File::open(root.join("normal.bsa")).context("failed to open normal archive")?;
-        let (normal, normal_options) =
-            Archive::read(&fd).context("failed to read normal archive")?;
+        let (normal, normal_options) = Archive::read(root.join("normal.bsa").as_path())
+            .context("failed to read normal archive")?;
         assert!(!normal_options.flags.xbox_archive());
         assert!(!normal_options.flags.xbox_compressed());
         assert!(!normal_options.flags.compressed());
 
-        let fd = fs::File::open(root.join("xbox.bsa")).context("failed to open xbox archive")?;
-        let (xbox, xbox_options) = Archive::read(&fd).context("failed to read xbox archive")?;
+        let (xbox, xbox_options) = Archive::read(root.join("xbox.bsa").as_path())
+            .context("failed to read xbox archive")?;
         assert!(xbox_options.flags.xbox_archive());
         assert!(!xbox_options.flags.xbox_compressed());
         assert!(!xbox_options.flags.compressed());
@@ -559,8 +552,8 @@ mod tests {
     #[test]
     fn file_compression_diverges_from_archive_compression() -> anyhow::Result<()> {
         let root = Path::new("data/tes4_compression_mismatch_test");
-        let fd = fs::File::open(root.join("test.bsa")).context("failed to open archive")?;
-        let (bsa, options) = Archive::read(&fd).context("failed to read archive")?;
+        let (bsa, options) =
+            Archive::read(root.join("test.bsa").as_path()).context("failed to read archive")?;
         assert!(options.flags.compressed());
 
         let files = ["License.txt", "SampleA.png"];
@@ -586,42 +579,43 @@ mod tests {
     #[test]
     fn invalid_magic() -> anyhow::Result<()> {
         let path = Path::new("data/tes4_invalid_test/invalid_magic.bsa");
-        let fd = fs::File::open(path).context("failed to open archive")?;
-        let Err(Error::InvalidMagic(0x00324142)) = Archive::read(&fd) else {
-            anyhow::bail!("failure");
-        };
-        Ok(())
+        match Archive::read(path) {
+            Err(Error::InvalidMagic(0x00324142)) => Ok(()),
+            Err(err) => Err(anyhow::Error::from(err)),
+            Ok(_) => anyhow::bail!("read should have failed"),
+        }
     }
 
     #[test]
     fn invalid_size() -> anyhow::Result<()> {
         let path = Path::new("data/tes4_invalid_test/invalid_size.bsa");
-        let fd = fs::File::open(path).context("failed to open archive")?;
-        let Err(Error::InvalidHeaderSize(0xCC)) = Archive::read(&fd) else {
-            anyhow::bail!("failure");
-        };
-        Ok(())
+        match Archive::read(path) {
+            Err(Error::InvalidHeaderSize(0xCC)) => Ok(()),
+            Err(err) => Err(anyhow::Error::from(err)),
+            Ok(_) => anyhow::bail!("read should have failed"),
+        }
     }
 
     #[test]
     fn invalid_version() -> anyhow::Result<()> {
         let path = Path::new("data/tes4_invalid_test/invalid_version.bsa");
-        let fd = fs::File::open(path).context("failed to open archive")?;
-        let Err(Error::InvalidVersion(42)) = Archive::read(&fd) else {
-            anyhow::bail!("failure");
-        };
-        Ok(())
+        match Archive::read(path) {
+            Err(Error::InvalidVersion(42)) => Ok(()),
+            Err(err) => Err(anyhow::Error::from(err)),
+            Ok(_) => anyhow::bail!("read should have failed"),
+        }
     }
 
     #[test]
     fn invalid_exhausted() -> anyhow::Result<()> {
         let path = Path::new("data/tes4_invalid_test/invalid_exhausted.bsa");
-        let fd = fs::File::open(path).context("failed to open archive")?;
-        if let Err(Error::Io(error)) = Archive::read(&fd) {
-            assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
-        } else {
-            anyhow::bail!("failure");
-        };
-        Ok(())
+        match Archive::read(path) {
+            Err(Error::Io(error)) => {
+                assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+                Ok(())
+            }
+            Err(err) => Err(anyhow::Error::from(err)),
+            Ok(_) => anyhow::bail!("read should have failed"),
+        }
     }
 }

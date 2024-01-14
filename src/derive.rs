@@ -29,6 +29,16 @@ macro_rules! reader {
                 Self::do_read(&mut source)
             }
         }
+
+        impl crate::Reader<&::std::path::Path> for $this<'static> {
+            type Error = Error;
+            type Item = $result<$this<'static>>;
+
+            fn read(source: &::std::path::Path) -> Result<Self::Item> {
+                let fd = ::std::fs::File::open(source)?;
+                Self::read(&fd)
+            }
+        }
     };
 }
 
