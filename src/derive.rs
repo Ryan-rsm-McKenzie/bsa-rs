@@ -80,7 +80,7 @@ macro_rules! key {
     ($this:ident) => {
         #[derive(::core::clone::Clone, ::core::fmt::Debug, ::core::default::Default)]
         pub struct $this {
-            pub hash: hashing::Hash,
+            pub hash: Hash,
             pub name: ::bstr::BString,
         }
 
@@ -104,8 +104,8 @@ macro_rules! key {
             }
         }
 
-        impl ::core::borrow::Borrow<hashing::Hash> for $this {
-            fn borrow(&self) -> &hashing::Hash {
+        impl ::core::borrow::Borrow<Hash> for $this {
+            fn borrow(&self) -> &Hash {
                 &self.hash
             }
         }
@@ -123,11 +123,11 @@ pub(crate) use key;
 
 macro_rules! mapping {
     ($this:ident, $mapping:ident: $key:ty => $value:ident) => {
-        type $mapping<'a> = ::std::collections::BTreeMap<$key, $value<'a>>;
+        pub(crate) type $mapping<'a> = ::std::collections::BTreeMap<$key, $value<'a>>;
 
         #[derive(::core::default::Default)]
         pub struct $this<'a> {
-            map: $mapping<'a>,
+            pub(crate) map: $mapping<'a>,
         }
 
         impl<'a> $this<'a> {
