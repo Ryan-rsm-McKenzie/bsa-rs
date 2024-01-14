@@ -220,6 +220,7 @@ impl Key {
     }
 }
 
+#[non_exhaustive]
 #[derive(Clone, Copy, Default)]
 pub struct Options {
     pub version: Version,
@@ -454,9 +455,10 @@ mod tests {
                 fs::File::open(&path).with_context(|| format!("failed to open file: {path:?}"))?;
             let (bsa, options) = Archive::read(&fd)
                 .with_context(|| format!("failed to read archive: {file_name}"))?;
-            let compression_options = FileCompressionOptions {
-                version: options.version,
-                ..Default::default()
+            let compression_options = {
+                let mut x = FileCompressionOptions::default();
+                x.version = options.version;
+                x
             };
 
             let files = ["License.txt", "Preview.png"];

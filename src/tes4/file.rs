@@ -12,6 +12,7 @@ use flate2::{
 use lzzzz::lz4f::{self, AutoFlush, PreferencesBuilder};
 use std::io::Write;
 
+#[non_exhaustive]
 #[derive(Clone, Copy, Default)]
 pub struct CompressionOptions {
     pub version: Version,

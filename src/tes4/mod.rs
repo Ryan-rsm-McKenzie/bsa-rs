@@ -50,6 +50,7 @@ pub enum Error {
 
 pub type Result<T> = core::result::Result<T, Error>;
 
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum CompressionCodec {
     #[default]
