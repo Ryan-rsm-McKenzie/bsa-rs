@@ -937,4 +937,85 @@ mod test {
             assert!(d.len() == 0);
         }
     }
+
+    mod archive {
+        use crate::{
+            prelude::*,
+            tes4::{hashing, Archive, CompressionOptions, File},
+        };
+        use anyhow::Context as _;
+        use bstr::ByteSlice as _;
+        use std::{fs, path::Path};
+
+        #[test]
+        fn default_state() {
+            let bsa = Archive::new();
+            assert!(bsa.is_empty());
+            assert!(bsa.len() == 0);
+        }
+
+        #[test]
+        fn read_v104_compressed() -> anyhow::Result<()> {
+            let test = |file_name: &str| -> anyhow::Result<()> {
+                let root = Path::new("data/tes4_compression_test");
+
+                let path = root.join(file_name);
+                let fd = fs::File::open(&path)
+                    .with_context(|| format!("failed to open file: {path:?}"))?;
+                let (bsa, options) = Archive::read(&fd)
+                    .with_context(|| format!("failed to read archive: {file_name}"))?;
+                let compression_options = CompressionOptions {
+                    version: options.version,
+                    ..Default::default()
+                };
+
+                let files = ["License.txt", "Preview.png"];
+                for file_name in files {
+                    let path = root.join(file_name);
+                    let directory = bsa
+                        .get(&hashing::hash_directory(b"".as_bstr()).0)
+                        .with_context(|| format!("failed to get directory for: {file_name}"))?;
+                    let compressed_from_archive = directory
+                        .get(&hashing::hash_file(file_name.as_bytes().as_bstr()).0)
+                        .with_context(|| format!("failed to get file for: {file_name}"))?;
+                    assert!(compressed_from_archive.is_compressed());
+
+                    let metadata = fs::metadata(&path)
+                        .with_context(|| format!("failed to get metadata for: {path:?}"))?;
+                    let decompressed_len = compressed_from_archive
+                        .decompressed_len()
+                        .with_context(|| format!("file was not compressed: {path:?}"))?
+                        as u64;
+                    assert_eq!(decompressed_len, metadata.len());
+
+                    let fd = fs::File::open(&path)
+                        .with_context(|| format!("failed to open file: {path:?}"))?;
+                    let decompressed_from_disk = File::read(&fd)
+                        .with_context(|| format!("failed to read file from disk: {path:?}"))?;
+                    let compressed_from_disk = decompressed_from_disk
+                        .compress(compression_options)
+                        .with_context(|| format!("failed to compress file: {path:?}"))?;
+                    assert_eq!(
+                        compressed_from_archive.decompressed_len(),
+                        compressed_from_disk.decompressed_len()
+                    );
+
+                    let decompressed_from_archive = compressed_from_archive
+                        .decompress(compression_options)
+                        .with_context(|| format!("failed to decompress file: {file_name}"))?;
+                    assert_eq!(
+                        decompressed_from_archive.as_bytes(),
+                        decompressed_from_disk.as_bytes()
+                    );
+                }
+
+                Ok(())
+            };
+
+            test("test_104.bsa").context("v104")?;
+            test("test_105.bsa").context("v105")?;
+
+            Ok(())
+        }
+    }
 }
