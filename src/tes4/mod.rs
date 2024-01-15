@@ -29,8 +29,11 @@ pub enum Error {
     #[error("buffer failed to decompress to the expected size... expected {expected} bytes, but got {actual} bytes")]
     DecompressionSizeMismatch { expected: usize, actual: usize },
 
-    #[error(transparent)]
-    IntegralTruncation(#[from] TryFromIntError),
+    #[error("an operation two integers would have overflowed and corrupted data")]
+    IntegralOverflow,
+
+    #[error("an operation on an integer would have truncated and corrupted data")]
+    IntegralTruncation,
 
     #[error("invalid header size read from file header: {0}")]
     InvalidHeaderSize(u32),
@@ -46,6 +49,12 @@ pub enum Error {
 
     #[error(transparent)]
     LZ4(#[from] lz4f::Error),
+}
+
+impl From<TryFromIntError> for Error {
+    fn from(_: TryFromIntError) -> Self {
+        Self::IntegralTruncation
+    }
 }
 
 pub type Result<T> = core::result::Result<T, Error>;

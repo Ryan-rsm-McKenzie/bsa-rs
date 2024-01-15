@@ -1,15 +1,16 @@
 use crate::{
     containers::CompressableByteContainer,
     derive,
-    io::{Endian, Source},
+    io::{Endian, Sink, Source},
     protocols::{self, BZString, ZString},
     tes4::{
         self, directory::Map as DirectoryMap, Directory, DirectoryKey, Error, File, Hash, Result,
         Version,
     },
 };
-use bstr::BString;
+use bstr::{BStr, BString, ByteSlice as _};
 use core::mem;
+use std::{borrow::Cow, io::Write};
 
 bitflags::bitflags! {
     #[repr(transparent)]
@@ -167,6 +168,7 @@ mod constants {
 struct Offsets {
     file_entries: usize,
     file_names: usize,
+    file_data: usize,
 }
 
 struct Header {
@@ -175,6 +177,7 @@ struct Header {
     directory_count: u32,
     file_count: u32,
     directory_names_len: u32,
+    file_names_len: u32,
     archive_types: Types,
 }
 
@@ -198,6 +201,7 @@ impl Header {
             };
             directory_entries + (directory_entry_size * self.directory_count as usize)
         };
+
         let file_names = {
             let directory_names_len = if self.archive_flags.directory_strings() {
                 // directory names are stored using a bzstring
@@ -210,9 +214,17 @@ impl Header {
             file_entries
                 + (directory_names_len + constants::FILE_ENTRY_SIZE * self.file_count as usize)
         };
+
+        let file_data = if self.archive_flags.file_strings() {
+            file_names + self.file_names_len as usize
+        } else {
+            file_names
+        };
+
         Offsets {
             file_entries,
             file_names,
+            file_data,
         }
     }
 }
@@ -238,6 +250,324 @@ type ReadResult<T> = (T, Options);
 derive::archive!(Archive => ReadResult, Map: Key => Directory);
 
 impl<'a> Archive<'a> {
+    pub fn write<O>(&self, stream: &mut O, options: &Options) -> Result<()>
+    where
+        O: Write,
+    {
+        let mut sink = Sink::new(stream);
+        let header = self.make_header(*options)?;
+        Self::write_header(&mut sink, &header)?;
+        self.write_directories_in_order(&mut sink, &header, *options)?;
+        Ok(())
+    }
+
+    fn make_header(&self, options: Options) -> Result<Header> {
+        #[derive(Default)]
+        struct Info {
+            count: usize,
+            names_len: usize,
+        }
+
+        let mut files = Info::default();
+        let mut directories = Info::default();
+
+        for directory in self {
+            directories.count += 1;
+            if options.flags.directory_strings() {
+                // zstring -> include null terminator
+                directories.names_len += directory.0.name.len() + 1;
+            }
+
+            for file in directory.1 {
+                files.count += 1;
+                if options.flags.file_strings() {
+                    // zstring -> include null terminator
+                    files.names_len += file.0.name.len() + 1;
+                }
+            }
+        }
+
+        Ok(Header {
+            version: options.version,
+            archive_flags: options.flags,
+            directory_count: directories.count.try_into()?,
+            file_count: files.count.try_into()?,
+            directory_names_len: directories.names_len.try_into()?,
+            file_names_len: files.names_len.try_into()?,
+            archive_types: options.types,
+        })
+    }
+
+    fn sort_files_for_write<'dir>(
+        options: Options,
+        directory: &'dir Directory<'a>,
+        files: &mut Vec<(&'dir DirectoryKey, &'dir File<'a>)>,
+    ) {
+        files.clear();
+        files.extend(directory.iter());
+        if options.flags.xbox_archive() {
+            files.sort_by_key(|&(key, _)| key.hash.numeric().reverse_bits());
+        }
+    }
+
+    fn concat_directory_and_file_name<'s>(
+        directory: &'s Key,
+        file: &'s DirectoryKey,
+    ) -> Cow<'s, BStr> {
+        let directory = &directory.name;
+        let file = &file.name;
+
+        let directory = match directory.len() {
+            0 => b"".as_bstr(),
+            1 => match directory[0] {
+                b'/' | b'\\' | b'.' => b"".as_bstr(),
+                _ => directory.as_ref(),
+            },
+            _ => directory.as_ref(),
+        };
+
+        match (directory.is_empty(), file.is_empty()) {
+            (true, true) => Cow::default(),
+            (true, false) => Cow::from(file.as_ref()),
+            (false, true) => Cow::from(directory),
+            (false, false) => {
+                let string: BString = [directory, b"\\".as_bstr(), file.as_ref()]
+                    .into_iter()
+                    .flat_map(|x| x.as_bytes())
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .into();
+                Cow::from(string)
+            }
+        }
+    }
+
+    fn write_directories_in_order<O>(
+        &self,
+        sink: &mut Sink<O>,
+        header: &Header,
+        options: Options,
+    ) -> Result<()>
+    where
+        O: Write,
+    {
+        let offsets = header.compute_offsets();
+        let mut file_entries_offset = u32::try_from(offsets.file_entries)?
+            .checked_add(header.file_names_len)
+            .ok_or(Error::IntegralOverflow)?;
+        let mut file_data_offset = u32::try_from(offsets.file_data)?;
+
+        macro_rules! visit {
+            ($iter:ident) => {
+                for (directory_key, directory) in $iter.iter() {
+                    Self::write_directory_entry(
+                        sink,
+                        options,
+                        directory_key,
+                        directory,
+                        &mut file_entries_offset,
+                    )?;
+                }
+
+                let mut sorted_files = Vec::new();
+                for (directory_key, directory) in $iter.iter() {
+                    Self::sort_files_for_write(options, &directory, &mut sorted_files);
+
+                    let embedded_file_names = if options.flags.embedded_file_names() {
+                        sorted_files
+                            .iter()
+                            .map(|(file_key, _)| {
+                                Self::concat_directory_and_file_name(directory_key, file_key)
+                            })
+                            .collect::<Vec<_>>()
+                    } else {
+                        Vec::default()
+                    };
+
+                    sink.write_protocol::<BZString>(directory_key.name.as_ref(), Endian::Little)?;
+                    for (i, (file_key, file)) in sorted_files.iter().enumerate() {
+                        Self::write_file_entry(
+                            sink,
+                            options,
+                            file_key,
+                            file,
+                            &mut file_data_offset,
+                            embedded_file_names.get(i),
+                        )?;
+                    }
+
+                    if options.flags.file_strings() {
+                        for (file_key, _) in &sorted_files {
+                            sink.write_protocol::<ZString>(file_key.name.as_ref(), Endian::Little)?;
+                        }
+                    }
+
+                    for (i, (_, file)) in sorted_files.iter().enumerate() {
+                        Self::write_file_data(sink, file, embedded_file_names.get(i))?;
+                    }
+                }
+            };
+        }
+
+        if options.flags.xbox_archive() {
+            let mut v: Vec<_> = self.iter().collect();
+            v.sort_by_key(|&(key, _)| key.hash.numeric().reverse_bits());
+            visit!(v);
+        } else {
+            visit!(self);
+        }
+
+        Ok(())
+    }
+
+    fn write_directory_entry<O>(
+        sink: &mut Sink<O>,
+        options: Options,
+        key: &Key,
+        directory: &Directory<'a>,
+        file_entries_offset: &mut u32,
+    ) -> Result<()>
+    where
+        O: Write,
+    {
+        Self::write_hash(sink, options, key.hash)?;
+
+        let file_count: u32 = directory.len().try_into()?;
+        sink.write(&file_count, Endian::Little)?;
+
+        if options.version == Version::SSE {
+            sink.write(&0u32, Endian::Little)?;
+        }
+
+        sink.write(file_entries_offset, Endian::Little)?;
+
+        if options.version == Version::SSE {
+            sink.write(&0u32, Endian::Little)?;
+        }
+
+        if options.flags.directory_strings() {
+            // bzstring -> include prefix byte and null terminator
+            *file_entries_offset = file_entries_offset
+                .checked_add((key.name.len() + 2).try_into()?)
+                .ok_or(Error::IntegralOverflow)?;
+        }
+
+        *file_entries_offset = file_entries_offset
+            .checked_add(
+                directory
+                    .len()
+                    .checked_mul(constants::FILE_ENTRY_SIZE)
+                    .ok_or(Error::IntegralOverflow)?
+                    .try_into()?,
+            )
+            .ok_or(Error::IntegralOverflow)?;
+
+        Ok(())
+    }
+
+    fn write_file_data<O>(
+        sink: &mut Sink<O>,
+        file: &File<'a>,
+        embedded_file_name: Option<&Cow<'_, BStr>>,
+    ) -> Result<()>
+    where
+        O: Write,
+    {
+        if let Some(name) = embedded_file_name {
+            sink.write_protocol::<protocols::BString>(name, Endian::Little)?;
+        }
+
+        if let Some(len) = file.decompressed_len() {
+            let len: u32 = len.try_into()?;
+            sink.write(&len, Endian::Little)?;
+        }
+
+        sink.write_bytes(file.as_bytes())?;
+        Ok(())
+    }
+
+    fn write_file_entry<O>(
+        sink: &mut Sink<O>,
+        options: Options,
+        key: &DirectoryKey,
+        file: &File<'a>,
+        file_data_offset: &mut u32,
+        embedded_file_name: Option<&Cow<'_, BStr>>,
+    ) -> Result<()>
+    where
+        O: Write,
+    {
+        Self::write_hash(sink, options, key.hash)?;
+        let (size_with_info, size) = {
+            let mut size = file.len();
+            if let Some(name) = embedded_file_name {
+                // include prefix byte
+                size += name.len() + 1;
+            }
+            if file.is_compressed() {
+                size += mem::size_of::<u32>();
+            }
+
+            let size: u32 = size.try_into()?;
+            let masked = size & !(constants::FILE_FLAG_COMPRESSION | constants::FILE_FLAG_CHECKED);
+            if masked != size {
+                return Err(Error::IntegralTruncation);
+            }
+
+            if file.is_compressed() == options.flags.compressed() {
+                (size, masked)
+            } else {
+                (size | constants::FILE_FLAG_COMPRESSION, masked)
+            }
+        };
+        sink.write(&(size_with_info, *file_data_offset), Endian::Little)?;
+        *file_data_offset = file_data_offset
+            .checked_add(size)
+            .ok_or(Error::IntegralOverflow)?;
+        Ok(())
+    }
+
+    fn write_hash<O>(sink: &mut Sink<O>, options: Options, hash: Hash) -> Result<()>
+    where
+        O: Write,
+    {
+        sink.write(
+            &(hash.last, hash.last2, hash.length, hash.first),
+            Endian::Little,
+        )?;
+
+        let endian = if options.flags.xbox_archive() {
+            Endian::Big
+        } else {
+            Endian::Little
+        };
+        sink.write(&hash.crc, endian)?;
+
+        Ok(())
+    }
+
+    fn write_header<O>(sink: &mut Sink<O>, header: &Header) -> Result<()>
+    where
+        O: Write,
+    {
+        sink.write(
+            &(
+                constants::BSA,
+                header.version as u32,
+                constants::HEADER_SIZE,
+                header.archive_flags.bits(),
+                header.directory_count,
+                header.file_count,
+                header.directory_names_len,
+                header.file_names_len,
+                header.archive_types.bits(),
+                0u16,
+            ),
+            Endian::Little,
+        )?;
+        Ok(())
+    }
+
     fn do_read<I>(source: &mut I) -> Result<ReadResult<Self>>
     where
         I: ?Sized + Source<'a>,
@@ -404,7 +734,6 @@ impl<'a> Archive<'a> {
             archive_types,
             padding,
         ) = source.read(Endian::Little)?;
-        let _: u32 = file_names_len;
         let _: u16 = padding;
 
         if magic != constants::BSA {
@@ -432,6 +761,7 @@ impl<'a> Archive<'a> {
             directory_count,
             file_count,
             directory_names_len,
+            file_names_len,
             archive_types,
         })
     }
