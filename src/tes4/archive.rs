@@ -411,7 +411,7 @@ impl<'a> Archive<'a> {
 
         if options.flags.xbox_archive() {
             let mut v: Vec<_> = self.iter().collect();
-            v.sort_by_key(|&(key, _)| key.hash.numeric().reverse_bits());
+            v.sort_by_key(|&(key, _)| key.hash.numeric().swap_bytes());
             visit!(v);
         } else {
             visit!(self);
