@@ -488,7 +488,7 @@ mod tests {
                 let decompressed_from_disk = File::read(path.as_path())
                     .with_context(|| format!("failed to read file from disk: {path:?}"))?;
                 let compressed_from_disk = decompressed_from_disk
-                    .compress(compression_options)
+                    .compress(&compression_options)
                     .with_context(|| format!("failed to compress file: {path:?}"))?;
                 assert_eq!(
                     compressed_from_archive.decompressed_len(),
@@ -496,7 +496,7 @@ mod tests {
                 );
 
                 let decompressed_from_archive = compressed_from_archive
-                    .decompress(compression_options)
+                    .decompress(&compression_options)
                     .with_context(|| format!("failed to decompress file: {file_name}"))?;
                 assert_eq!(
                     decompressed_from_archive.as_bytes(),

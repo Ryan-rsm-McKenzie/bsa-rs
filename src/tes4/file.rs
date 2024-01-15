@@ -28,7 +28,7 @@ type ReadResult<T> = T;
 derive::container!(File => ReadResult);
 
 impl<'a> File<'a> {
-    pub fn compress(&self, options: CompressionOptions) -> Result<File<'static>> {
+    pub fn compress(&self, options: &CompressionOptions) -> Result<File<'static>> {
         let mut bytes = Vec::new();
         self.compress_into(&mut bytes, options)?;
         bytes.shrink_to_fit();
@@ -37,7 +37,7 @@ impl<'a> File<'a> {
         })
     }
 
-    pub fn compress_into(&self, out: &mut Vec<u8>, options: CompressionOptions) -> Result<()> {
+    pub fn compress_into(&self, out: &mut Vec<u8>, options: &CompressionOptions) -> Result<()> {
         if self.is_compressed() {
             Err(Error::AlreadyCompressed)
         } else {
@@ -51,7 +51,7 @@ impl<'a> File<'a> {
         }
     }
 
-    pub fn decompress(&self, options: CompressionOptions) -> Result<File<'static>> {
+    pub fn decompress(&self, options: &CompressionOptions) -> Result<File<'static>> {
         let mut bytes = Vec::new();
         self.decompress_into(&mut bytes, options)?;
         bytes.shrink_to_fit();
@@ -60,7 +60,7 @@ impl<'a> File<'a> {
         })
     }
 
-    pub fn decompress_into(&self, out: &mut Vec<u8>, options: CompressionOptions) -> Result<()> {
+    pub fn decompress_into(&self, out: &mut Vec<u8>, options: &CompressionOptions) -> Result<()> {
         let Some(decompressed_len) = self.decompressed_len() else {
             return Err(Error::AlreadyDecompressed);
         };
@@ -99,7 +99,7 @@ impl<'a> File<'a> {
         !self.is_compressed()
     }
 
-    pub fn write<O>(&self, stream: &mut O, options: CompressionOptions) -> Result<()>
+    pub fn write<O>(&self, stream: &mut O, options: &CompressionOptions) -> Result<()>
     where
         O: ?Sized + Write,
     {
