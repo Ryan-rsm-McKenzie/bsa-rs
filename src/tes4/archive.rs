@@ -306,7 +306,7 @@ impl<'a> Archive<'a> {
         files.clear();
         files.extend(directory.iter());
         if options.flags.xbox_archive() {
-            files.sort_by_key(|&(key, _)| key.hash.numeric().reverse_bits());
+            files.sort_by_key(|&(key, _)| key.hash.numeric().swap_bytes());
         }
     }
 
