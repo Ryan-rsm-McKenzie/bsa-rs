@@ -352,6 +352,7 @@ impl<'a> Archive<'a> {
         O: Write,
     {
         let offsets = header.compute_offsets();
+        // let mut file_entries_offset = offsets.file_entries + header.file_names_len;
         let mut file_entries_offset = u32::try_from(offsets.file_entries)?
             .checked_add(header.file_names_len)
             .ok_or(Error::IntegralOverflow)?;
@@ -447,11 +448,13 @@ impl<'a> Archive<'a> {
 
         if options.flags.directory_strings() {
             // bzstring -> include prefix byte and null terminator
+            // file_entries_offset += key.name.len() + 2;
             *file_entries_offset = file_entries_offset
                 .checked_add((key.name.len() + 2).try_into()?)
                 .ok_or(Error::IntegralOverflow)?;
         }
 
+        // file_entries_offset += directory.len() * constants::FILE_ENTRY_SIZE;
         *file_entries_offset = file_entries_offset
             .checked_add(
                 directory
@@ -498,6 +501,7 @@ impl<'a> Archive<'a> {
         O: Write,
     {
         Self::write_hash(sink, options, key.hash)?;
+
         let (size_with_info, size) = {
             let mut size = file.len();
             if let Some(name) = embedded_file_name {
@@ -521,9 +525,12 @@ impl<'a> Archive<'a> {
             }
         };
         sink.write(&(size_with_info, *file_data_offset), Endian::Little)?;
+
+        // file_data_offset += size;
         *file_data_offset = file_data_offset
             .checked_add(size)
             .ok_or(Error::IntegralOverflow)?;
+
         Ok(())
     }
 
