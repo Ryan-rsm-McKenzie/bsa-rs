@@ -6,7 +6,7 @@ mod containers;
 mod derive;
 mod hashing;
 mod io;
-mod strings;
+mod protocols;
 pub mod tes3;
 pub mod tes4;
 

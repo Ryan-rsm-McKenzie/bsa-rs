@@ -2,7 +2,7 @@ use crate::{
     containers::ByteContainer,
     derive,
     io::{Endian, Sink, Source},
-    strings::ZString,
+    protocols::ZString,
     tes3::{hashing, Error, File, Hash, Result},
 };
 use bstr::BString;

@@ -2,7 +2,7 @@ use crate::{
     containers::CompressableByteContainer,
     derive,
     io::{Endian, Source},
-    strings::{self, BZString, ZString},
+    protocols::{self, BZString, ZString},
     tes4::{
         self, directory::Map as DirectoryMap, Directory, DirectoryKey, Error, File, Hash, Result,
         Version,
@@ -334,7 +334,7 @@ impl<'a> Archive<'a> {
 
                 match header.version {
                     Version::FO3 | Version::SSE if header.archive_flags.embedded_file_names() => {
-                        let mut s = source.read_protocol::<strings::BString>(Endian::Little)?;
+                        let mut s = source.read_protocol::<protocols::BString>(Endian::Little)?;
                         data_size -= s.len() + 1; // include prefix byte
                         if let Some(pos) = s.iter().rposition(|&x| x == b'\\' || x == b'/') {
                             if directory_name.is_none() {
