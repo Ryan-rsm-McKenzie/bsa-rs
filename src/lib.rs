@@ -14,17 +14,20 @@ pub struct Borrowed<'a>(pub &'a [u8]);
 
 pub struct Copied<'a>(pub &'a [u8]);
 
-pub trait Reader<T>
-where
-    Self: Sized,
-{
+mod private {
+    pub trait Sealed {}
+}
+
+use private::Sealed;
+
+pub trait Reader<T>: Sealed {
     type Error;
     type Item;
 
     fn read(source: T) -> core::result::Result<Self::Item, Self::Error>;
 }
 
-pub trait CompressableFrom<T> {
+pub trait CompressableFrom<T>: Sealed {
     #[must_use]
     fn from_compressed(value: T, decompressed_len: usize) -> Self;
 

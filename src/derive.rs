@@ -48,6 +48,8 @@ macro_rules! container {
     ($this:ident => $result:ident) => {
         crate::derive::reader!($this => $result);
 
+		impl<'a> crate::Sealed for $this<'a> {}
+
         impl<'a> $this<'a> {
             #[must_use]
             pub fn as_bytes(&self) -> &[u8] {
@@ -134,6 +136,8 @@ pub(crate) use key;
 macro_rules! mapping {
     ($this:ident, $mapping:ident: $key:ty => $value:ident) => {
         pub(crate) type $mapping<'a> = ::std::collections::BTreeMap<$key, $value<'a>>;
+
+        impl<'a> crate::Sealed for $this<'a> {}
 
         #[derive(::core::default::Default)]
         pub struct $this<'a> {
