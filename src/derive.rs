@@ -203,6 +203,10 @@ macro_rules! mapping {
                 self.map.iter_mut()
             }
 
+            pub fn keys(&self) -> impl ::core::iter::Iterator<Item = &$key> {
+                self.map.keys()
+            }
+
             #[must_use]
             pub fn len(&self) -> usize {
                 self.map.len()
@@ -225,6 +229,14 @@ macro_rules! mapping {
                 K: ::core::borrow::Borrow<Hash>,
             {
                 self.map.remove_entry(key.borrow())
+            }
+
+            pub fn values(&self) -> impl ::core::iter::Iterator<Item = &$value<'a>> {
+                self.map.values()
+            }
+
+            pub fn values_mut(&mut self) -> impl ::core::iter::Iterator<Item = &mut $value<'a>> {
+                self.map.values_mut()
             }
         }
 
