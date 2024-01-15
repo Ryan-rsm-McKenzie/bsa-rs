@@ -29,14 +29,14 @@ pub trait Source<'a> {
 
     fn read<T>(&mut self, endian: Endian) -> io::Result<T>
     where
-        T: BinaryStreamable<Item = T>,
+        T: BinaryReadable<Item = T>,
     {
         T::from_stream(self, endian)
     }
 
     fn read_protocol<T>(&mut self, endian: Endian) -> io::Result<T::Item>
     where
-        T: BinaryStreamable,
+        T: BinaryReadable,
     {
         T::from_stream(self, endian)
     }
@@ -177,20 +177,26 @@ impl TryFrom<&File> for MappedSource {
 
 make_sourceable!(MappedSource, 'static);
 
-pub trait BinaryStreamable {
+pub trait BinaryReadable {
     type Item;
-
-    fn from_be_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
-    where
-        I: ?Sized + Source<'a>;
-
-    fn from_le_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
-    where
-        I: ?Sized + Source<'a>;
 
     fn from_ne_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
     where
         I: ?Sized + Source<'a>;
+
+    fn from_be_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+    where
+        I: ?Sized + Source<'a>,
+    {
+        Self::from_ne_stream(stream)
+    }
+
+    fn from_le_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+    where
+        I: ?Sized + Source<'a>,
+    {
+        Self::from_ne_stream(stream)
+    }
 
     fn from_stream<'a, I>(stream: &mut I, endian: Endian) -> io::Result<Self::Item>
     where
@@ -202,18 +208,28 @@ pub trait BinaryStreamable {
             Endian::Native => Self::from_ne_stream(stream),
         }
     }
+}
 
-    fn to_be_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
-    where
-        O: ?Sized + Write;
-
-    fn to_le_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
-    where
-        O: ?Sized + Write;
+pub trait BinaryWriteable {
+    type Item: ?Sized;
 
     fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
     where
         O: ?Sized + Write;
+
+    fn to_be_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+    where
+        O: ?Sized + Write,
+    {
+        Self::to_ne_stream(stream, item)
+    }
+
+    fn to_le_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+    where
+        O: ?Sized + Write,
+    {
+        Self::to_ne_stream(stream, item)
+    }
 
     fn to_stream<O>(stream: &mut O, item: &Self::Item, endian: Endian) -> io::Result<()>
     where
@@ -230,7 +246,7 @@ pub trait BinaryStreamable {
 
 macro_rules! make_binary_streamable {
     ($t:ty) => {
-        impl BinaryStreamable for $t {
+        impl BinaryReadable for $t {
             type Item = $t;
 
             fn from_be_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
@@ -259,6 +275,10 @@ macro_rules! make_binary_streamable {
                 stream.read_bytes(&mut bytes)?;
                 Ok(Self::from_ne_bytes(bytes))
             }
+        }
+
+        impl BinaryWriteable for $t {
+            type Item = $t;
 
             fn to_be_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
             where
@@ -299,9 +319,9 @@ make_binary_streamable!(i64);
 
 macro_rules! make_binary_streamable_tuple {
     ($($idx:tt $t:ident),+) => {
-        impl<$($t,)+> BinaryStreamable for ($($t,)+)
+        impl<$($t,)+> BinaryReadable for ($($t,)+)
         where
-            $($t: BinaryStreamable,)+
+            $($t: BinaryReadable,)+
         {
             type Item = ($($t::Item,)+);
 
@@ -331,6 +351,13 @@ macro_rules! make_binary_streamable_tuple {
                     $t::from_ne_stream(stream)?,
                 )+))
             }
+		}
+
+		impl<$($t,)+> BinaryWriteable for ($($t,)+)
+		where
+			$($t: BinaryWriteable, <$t as BinaryWriteable>::Item: Sized,)+
+		{
+			type Item = ($($t::Item,)+);
 
             fn to_be_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
 			where
@@ -394,14 +421,14 @@ where
 
     pub fn write<T>(&mut self, item: &T, endian: Endian) -> io::Result<()>
     where
-        T: BinaryStreamable<Item = T>,
+        T: BinaryWriteable<Item = T>,
     {
         T::to_stream(&mut self.stream, item, endian)
     }
 
     pub fn write_protocol<T>(&mut self, item: &T::Item, endian: Endian) -> io::Result<()>
     where
-        T: BinaryStreamable,
+        T: BinaryWriteable,
     {
         T::to_stream(&mut self.stream, item, endian)
     }

@@ -219,7 +219,7 @@ impl<'a> Archive<'a> {
         O: Write,
     {
         for key in self.map.keys() {
-            sink.write_protocol::<ZString>(&key.name, Endian::Little)?;
+            sink.write_protocol::<ZString>(key.name.as_ref(), Endian::Little)?;
         }
 
         Ok(())

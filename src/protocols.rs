@@ -1,38 +1,6 @@
-use crate::io::{BinaryStreamable, Endian, Source};
-use bstr::BString as ByteString;
+use crate::io::{BinaryReadable, BinaryWriteable, Endian, Source};
+use bstr::{BStr as ByteStr, BString as ByteString};
 use std::io::{self, Write};
-
-macro_rules! streamable_boilerplate {
-    () => {
-        fn from_be_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
-        where
-            I: ?Sized + Source<'a>,
-        {
-            Self::from_ne_stream(stream)
-        }
-
-        fn from_le_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
-        where
-            I: ?Sized + Source<'a>,
-        {
-            Self::from_ne_stream(stream)
-        }
-
-        fn to_be_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
-        where
-            O: ?Sized + Write,
-        {
-            Self::to_ne_stream(stream, item)
-        }
-
-        fn to_le_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
-        where
-            O: ?Sized + Write,
-        {
-            Self::to_ne_stream(stream, item)
-        }
-    };
-}
 
 #[derive(Debug, thiserror::Error)]
 enum MalformedStringError {
@@ -51,10 +19,8 @@ impl MalformedStringError {
 
 pub struct BString;
 
-impl BinaryStreamable for BString {
+impl BinaryReadable for BString {
     type Item = ByteString;
-
-    streamable_boilerplate!();
 
     fn from_ne_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
     where
@@ -67,6 +33,10 @@ impl BinaryStreamable for BString {
         result.shrink_to_fit();
         Ok(result.into())
     }
+}
+
+impl BinaryWriteable for BString {
+    type Item = ByteStr;
 
     fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
     where
@@ -76,7 +46,7 @@ impl BinaryStreamable for BString {
         match len {
             Ok(len) => {
                 stream.write_all(&len.to_ne_bytes())?;
-                stream.write_all(&item[..])?;
+                stream.write_all(item)?;
                 Ok(())
             }
             Err(_) => Err(MalformedStringError::StringTooLarge.marshal()),
@@ -86,10 +56,8 @@ impl BinaryStreamable for BString {
 
 pub struct ZString;
 
-impl BinaryStreamable for ZString {
+impl BinaryReadable for ZString {
     type Item = ByteString;
-
-    streamable_boilerplate!();
 
     fn from_ne_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
     where
@@ -107,12 +75,16 @@ impl BinaryStreamable for ZString {
         result.shrink_to_fit();
         Ok(result.into())
     }
+}
+
+impl BinaryWriteable for ZString {
+    type Item = ByteStr;
 
     fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
     where
         O: ?Sized + Write,
     {
-        stream.write_all(&item[..])?;
+        stream.write_all(item)?;
         stream.write_all(b"\0")?;
         Ok(())
     }
@@ -120,10 +92,8 @@ impl BinaryStreamable for ZString {
 
 pub struct BZString;
 
-impl BinaryStreamable for BZString {
+impl BinaryReadable for BZString {
     type Item = ByteString;
-
-    streamable_boilerplate!();
 
     fn from_ne_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
     where
@@ -145,6 +115,10 @@ impl BinaryStreamable for BZString {
             Ok(Self::Item::default())
         }
     }
+}
+
+impl BinaryWriteable for BZString {
+    type Item = ByteStr;
 
     fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
     where
@@ -154,7 +128,7 @@ impl BinaryStreamable for BZString {
         match len {
             Ok(len) => {
                 stream.write_all(&len.to_ne_bytes())?;
-                stream.write_all(&item[..])?;
+                stream.write_all(item)?;
                 stream.write_all(b"\0")?;
                 Ok(())
             }
