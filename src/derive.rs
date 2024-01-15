@@ -122,8 +122,12 @@ macro_rules! key {
             }
         }
 
-        impl ::core::convert::From<::bstr::BString> for $this {
-            fn from(mut name: ::bstr::BString) -> Self {
+        impl<T> ::core::convert::From<T> for $this
+        where
+            T: Into<::bstr::BString>,
+        {
+            fn from(value: T) -> Self {
+                let mut name = value.into();
                 let hash = Self::hash_in_place(&mut name);
                 Self { hash, name }
             }

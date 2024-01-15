@@ -44,7 +44,7 @@ impl Ord for Hash {
 
 #[must_use]
 pub fn hash_file(path: &BStr) -> (Hash, BString) {
-    let mut path = BString::new(path.to_vec());
+    let mut path = path.to_owned();
     (hash_file_in_place(&mut path), path)
 }
 

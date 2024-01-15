@@ -230,11 +230,11 @@ impl<'a> Archive<'a> {
 mod tests {
     use crate::{
         prelude::*,
-        tes3::{self, Archive, ArchiveKey, Error, File, Hash},
+        tes3::{Archive, ArchiveKey, Error, File, Hash},
         Borrowed,
     };
     use anyhow::Context as _;
-    use bstr::{BString, ByteSlice as _};
+    use bstr::BString;
     use memmap2::Mmap;
     use std::{
         ffi::OsStr,
@@ -255,31 +255,24 @@ mod tests {
     #[test]
     fn invalid_magic() -> anyhow::Result<()> {
         let path = Path::new("data/tes3_invalid_test/invalid_magic.bsa");
-        let stream =
-            fs::File::open(&path).with_context(|| format!("failed to open file: {path:?}"))?;
-        let read_result = Archive::read(&stream);
-        let test = match read_result {
-            Err(Error::InvalidMagic(0x200)) => true,
-            _ => false,
-        };
-        assert!(test);
-
-        Ok(())
+        match Archive::read(path) {
+            Err(Error::InvalidMagic(0x200)) => Ok(()),
+            Err(err) => Err(anyhow::Error::from(err)),
+            Ok(_) => anyhow::bail!("read should have failed"),
+        }
     }
 
     #[test]
     fn invalid_out_of_bounds() -> anyhow::Result<()> {
         let path = Path::new("data/tes3_invalid_test/invalid_exhausted.bsa");
-        let stream =
-            fs::File::open(&path).with_context(|| format!("failed to open file: {path:?}"))?;
-        let read_result = Archive::read(&stream);
-        let test = match read_result {
-            Err(Error::Io(io)) if io.kind() == io::ErrorKind::UnexpectedEof => true,
-            _ => false,
-        };
-        assert!(test);
-
-        Ok(())
+        match Archive::read(path) {
+            Err(Error::Io(io)) => {
+                assert_eq!(io.kind(), io::ErrorKind::UnexpectedEof);
+                Ok(())
+            }
+            Err(err) => Err(anyhow::Error::from(err)),
+            Ok(_) => anyhow::bail!("read should have failed"),
+        }
     }
 
     #[test]
@@ -287,9 +280,7 @@ mod tests {
         let root_path = Path::new("data/tes3_read_test/");
         let (archive,) = {
             let archive_path = root_path.join("test.bsa");
-            let stream = fs::File::open(&archive_path)
-                .with_context(|| format!("failed to open test archive: {archive_path:?}"))?;
-            Archive::read(&stream)
+            Archive::read(archive_path.as_path())
                 .with_context(|| format!("failed to read from archive: {archive_path:?}"))?
         };
 
@@ -308,9 +299,8 @@ mod tests {
                             )
                         })?
                         .as_os_str();
-                    let file_hash = tes3::hash_file(key.as_encoded_bytes().as_bstr()).0;
                     let file = archive
-                        .get(&file_hash)
+                        .get(&ArchiveKey::from(key.as_encoded_bytes()))
                         .with_context(|| format!("failed to get file with key: {key:?}"))?;
                     assert_eq!(file.len() as u64, metadata.len());
 
@@ -337,7 +327,7 @@ mod tests {
         impl<'a> Info<'a> {
             fn new(lo: u32, hi: u32, path: &'a str) -> Self {
                 let hash = Hash { lo, hi };
-                let key = ArchiveKey::from(BString::from(path));
+                let key = ArchiveKey::from(path);
                 assert_eq!(hash, key.hash);
                 Self {
                     key,

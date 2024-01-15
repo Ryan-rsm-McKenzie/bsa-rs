@@ -54,7 +54,7 @@ pub fn normalize_path(path: &mut BString) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::map_byte;
 
     #[test]
     fn test_mapping() {

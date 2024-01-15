@@ -59,7 +59,7 @@ fn crc32(bytes: &[u8]) -> u32 {
 
 #[must_use]
 pub fn hash_directory(path: &BStr) -> (Hash, BString) {
-    let mut path = BString::new(path.to_vec());
+    let mut path = path.to_owned();
     (hash_directory_in_place(&mut path), path)
 }
 
@@ -92,7 +92,7 @@ pub fn hash_directory_in_place(path: &mut BString) -> Hash {
 
 #[must_use]
 pub fn hash_file(path: &BStr) -> (Hash, BString) {
-    let mut path = BString::new(path.to_vec());
+    let mut path = path.to_owned();
     (hash_file_in_place(&mut path), path)
 }
 

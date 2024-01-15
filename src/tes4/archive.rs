@@ -338,7 +338,7 @@ impl<'a> Archive<'a> {
                         data_size -= s.len() + 1; // include prefix byte
                         if let Some(pos) = s.iter().rposition(|&x| x == b'\\' || x == b'/') {
                             if directory_name.is_none() {
-                                *directory_name = Some(BString::from(&s[..pos]));
+                                *directory_name = Some(s[..pos].into());
                             }
                             s.drain(..=pos);
                         }
@@ -441,10 +441,9 @@ impl<'a> Archive<'a> {
 mod tests {
     use crate::{
         prelude::*,
-        tes4::{self, Archive, ArchiveKey, DirectoryKey, Error, File, FileCompressionOptions},
+        tes4::{Archive, ArchiveKey, DirectoryKey, Error, File, FileCompressionOptions},
     };
     use anyhow::Context as _;
-    use bstr::{BString, ByteSlice as _};
     use std::{fs, io, path::Path};
 
     #[test]
@@ -471,10 +470,10 @@ mod tests {
             for file_name in files {
                 let path = root.join(file_name);
                 let directory = bsa
-                    .get(&tes4::hash_directory(b".".as_bstr()).0)
+                    .get(&ArchiveKey::from(b"."))
                     .with_context(|| format!("failed to get directory for: {file_name}"))?;
                 let compressed_from_archive = directory
-                    .get(&tes4::hash_file(file_name.as_bytes().as_bstr()).0)
+                    .get(&DirectoryKey::from(file_name))
                     .with_context(|| format!("failed to get file for: {file_name}"))?;
                 assert!(compressed_from_archive.is_compressed());
 
@@ -558,7 +557,7 @@ mod tests {
 
         let files = ["License.txt", "SampleA.png"];
         let directory = bsa
-            .get(&ArchiveKey::from(BString::from(b".")))
+            .get(&ArchiveKey::from(b"."))
             .context("failed to get root directory from archive")?;
         assert_eq!(directory.len(), files.len());
 
@@ -567,7 +566,7 @@ mod tests {
             let metadata = fs::metadata(&path)
                 .with_context(|| format!("failed to get metadata for file: {path:?}"))?;
             let file = directory
-                .get(&DirectoryKey::from(BString::from(file_name.as_bytes())))
+                .get(&DirectoryKey::from(file_name))
                 .with_context(|| format!("failed to get file from directory: {file_name}"))?;
             assert!(!file.is_compressed());
             assert_eq!(file.len() as u64, metadata.len());

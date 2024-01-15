@@ -1,5 +1,5 @@
 use crate::io::{BinaryStreamable, Endian, Source};
-use bstr::BString as BinaryString;
+use bstr::BString as ByteString;
 use std::io::{self, Write};
 
 macro_rules! streamable_boilerplate {
@@ -52,7 +52,7 @@ impl MalformedStringError {
 pub struct BString;
 
 impl BinaryStreamable for BString {
-    type Item = BinaryString;
+    type Item = ByteString;
 
     streamable_boilerplate!();
 
@@ -65,7 +65,7 @@ impl BinaryStreamable for BString {
         result.resize_with(usize::from(len), Default::default);
         stream.read_bytes(&mut result[..])?;
         result.shrink_to_fit();
-        Ok(BinaryString::new(result))
+        Ok(result.into())
     }
 
     fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
@@ -87,7 +87,7 @@ impl BinaryStreamable for BString {
 pub struct ZString;
 
 impl BinaryStreamable for ZString {
-    type Item = BinaryString;
+    type Item = ByteString;
 
     streamable_boilerplate!();
 
@@ -105,7 +105,7 @@ impl BinaryStreamable for ZString {
         }
 
         result.shrink_to_fit();
-        Ok(BinaryString::new(result))
+        Ok(result.into())
     }
 
     fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
@@ -121,7 +121,7 @@ impl BinaryStreamable for ZString {
 pub struct BZString;
 
 impl BinaryStreamable for BZString {
-    type Item = BinaryString;
+    type Item = ByteString;
 
     streamable_boilerplate!();
 
@@ -137,12 +137,12 @@ impl BinaryStreamable for BZString {
             match result.pop() {
                 Some(b'\0') => {
                     result.shrink_to_fit();
-                    Ok(BinaryString::new(result))
+                    Ok(result.into())
                 }
                 _ => Err(MalformedStringError::MissingNullTerminator.marshal()),
             }
         } else {
-            Ok(BinaryString::default())
+            Ok(Self::Item::default())
         }
     }
 
