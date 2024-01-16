@@ -374,15 +374,16 @@ impl<'bytes> Archive<'bytes> {
                 for (directory_key, directory) in $iter.iter() {
                     Self::sort_files_for_write(options, &directory, &mut sorted_files);
 
-                    let embedded_file_names = if options.flags.embedded_file_names() {
-                        sorted_files
-                            .iter()
-                            .map(|(file_key, _)| {
-                                Self::concat_directory_and_file_name(directory_key, file_key)
-                            })
-                            .collect::<Vec<_>>()
-                    } else {
-                        Vec::default()
+                    let embedded_file_names = match options.version {
+                        Version::FO3 | Version::SSE if options.flags.embedded_file_names() => {
+                            sorted_files
+                                .iter()
+                                .map(|(file_key, _)| {
+                                    Self::concat_directory_and_file_name(directory_key, file_key)
+                                })
+                                .collect::<Vec<_>>()
+                        }
+                        _ => Vec::default(),
                     };
 
                     sink.write_protocol::<BZString>(directory_key.name.as_ref(), Endian::Little)?;
