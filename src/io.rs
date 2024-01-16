@@ -83,7 +83,7 @@ macro_rules! make_sourceable {
                     Err(io::ErrorKind::UnexpectedEof.into())
                 } else {
                     self.pos += len;
-                    Ok(self.make_container(start..stop))
+                    Ok(self.make_bytes(start..stop))
                 }
             }
 
@@ -91,7 +91,7 @@ macro_rules! make_sourceable {
 				let len = self.source.len();
 				let start = self.pos;
 				let stop = len - start;
-				self.make_container(start..stop)
+				self.make_bytes(start..stop)
 			}
 
             fn seek_absolute(&mut self, pos: usize) -> io::Result<()> {
@@ -117,7 +117,7 @@ pub(crate) struct BorrowedSource<'bytes> {
 
 impl<'bytes> BorrowedSource<'bytes> {
     #[must_use]
-    fn make_container(&self, range: Range<usize>) -> Bytes<'bytes> {
+    fn make_bytes(&self, range: Range<usize>) -> Bytes<'bytes> {
         Bytes::from_borrowed(&self.source[range])
     }
 }
@@ -137,7 +137,7 @@ pub(crate) struct CopiedSource<'bytes> {
 
 impl<'bytes> CopiedSource<'bytes> {
     #[must_use]
-    fn make_container(&self, range: Range<usize>) -> Bytes<'static> {
+    fn make_bytes(&self, range: Range<usize>) -> Bytes<'static> {
         Bytes::from_owned(self.source[range].to_vec())
     }
 }
@@ -157,7 +157,7 @@ pub(crate) struct MappedSource {
 
 impl MappedSource {
     #[must_use]
-    fn make_container(&self, range: Range<usize>) -> Bytes<'static> {
+    fn make_bytes(&self, range: Range<usize>) -> Bytes<'static> {
         Bytes::from_mapped(range.start, range.len(), self.source.clone())
     }
 }
