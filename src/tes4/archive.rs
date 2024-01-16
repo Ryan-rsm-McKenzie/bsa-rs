@@ -850,10 +850,14 @@ mod tests {
             Archive, ArchiveFlags, ArchiveKey, ArchiveOptions, Directory, DirectoryKey, Error,
             File, FileOptions, Version,
         },
+        Borrowed,
     };
     use anyhow::Context as _;
     use memmap2::Mmap;
-    use std::{fs, io, path::Path};
+    use std::{
+        fs, io,
+        path::{Path, PathBuf},
+    };
 
     #[test]
     fn default_state() {
@@ -1004,6 +1008,194 @@ mod tests {
                 .with_context(|| format!("failed to get file from directory: {file_name}"))?;
             assert!(!file.is_compressed());
             assert_eq!(file.len() as u64, metadata.len());
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn flag_combinations() -> anyhow::Result<()> {
+        let infos = {
+            struct Pair {
+                hash: u64,
+                name: &'static str,
+            }
+
+            struct Info {
+                directory: Pair,
+                file: Pair,
+            }
+
+            impl Info {
+                fn new(
+                    directory_hash: u64,
+                    directory_name: &'static str,
+                    file_hash: u64,
+                    file_name: &'static str,
+                ) -> Self {
+                    Self {
+                        directory: Pair {
+                            hash: directory_hash,
+                            name: directory_name,
+                        },
+                        file: Pair {
+                            hash: file_hash,
+                            name: file_name,
+                        },
+                    }
+                }
+            }
+
+            [
+                Info::new(
+                    0x006819F973057265,
+                    "Share",
+                    0xDC415D456C077365,
+                    "License.txt",
+                ),
+                Info::new(
+                    0x00691A4374056573,
+                    "Tiles",
+                    0xDDE285B874093030,
+                    "tile_0000.png",
+                ),
+                Info::new(
+                    0x0E09AFBA620A6E64,
+                    "Background",
+                    0xC41A947762116F6D,
+                    "background_bottom.png",
+                ),
+                Info::new(
+                    0x4ADF420B74076170,
+                    "Tilemap",
+                    0x0D9BA627630A7273,
+                    "characters.png",
+                ),
+                Info::new(
+                    0x6A326CD4630B2033,
+                    "Construct 3",
+                    0xC7EDDCEA72066D65,
+                    "Readme.txt",
+                ),
+                Info::new(
+                    0x79CD3FEC630A7273,
+                    "Characters",
+                    0xD0E4FC14630E3030,
+                    "character_0000.png",
+                ),
+            ]
+        };
+
+        let mappings: Vec<_> = infos
+            .iter()
+            .map(|info| {
+                let path: PathBuf = [
+                    "data/tes4_flags_test",
+                    "data",
+                    info.directory.name,
+                    info.file.name,
+                ]
+                .into_iter()
+                .collect();
+                let fd = fs::File::open(&path)
+                    .with_context(|| format!("failed to open file: {path:?}"))?;
+                let map = unsafe { Mmap::map(&fd) }
+                    .with_context(|| format!("failed to memory map file: {path:?}"))?;
+                Ok(map)
+            })
+            .collect::<anyhow::Result<_>>()?;
+        let main: Archive = infos
+            .iter()
+            .zip(&mappings)
+            .map(|(info, mapping)| {
+                let file = File::from_decompressed(&mapping[..]);
+                let directory: Directory = [(DirectoryKey::from(info.file.name), file)]
+                    .into_iter()
+                    .collect();
+                (ArchiveKey::from(info.directory.name), directory)
+            })
+            .collect();
+
+        let test = |version: Version, flags: ArchiveFlags| -> anyhow::Result<()> {
+            let buffer = {
+                let mut v = Vec::new();
+                let options = ArchiveOptions::builder()
+                    .version(version)
+                    .flags(flags)
+                    .build();
+                main.write(&mut v, &options)
+                    .context("failed to write archive to buffer")?;
+                v
+            };
+
+            let (child, options) =
+                Archive::read(Borrowed(&buffer)).context("failed to read archive from buffer")?;
+            assert_eq!(options.version(), version);
+            assert_eq!(options.flags(), flags);
+            assert_eq!(main.len(), child.len());
+
+            let strings_present =
+                flags.file_strings() || (version != Version::TES4 && flags.embedded_file_names());
+
+            for (info, mapping) in infos.iter().zip(&mappings) {
+                let archive_key: ArchiveKey = info.directory.name.into();
+                let directory = child
+                    .get_key_value(&archive_key)
+                    .with_context(|| format!("failed to get directory: {}", info.directory.name))?;
+                assert_eq!(directory.0.hash.numeric(), info.directory.hash);
+                assert_eq!(directory.1.len(), 1);
+                if strings_present {
+                    assert_eq!(directory.0.name, archive_key.name);
+                }
+
+                let directory_key: DirectoryKey = info.file.name.into();
+                let file = directory
+                    .1
+                    .get_key_value(&directory_key)
+                    .with_context(|| format!("failed to get file: {}", info.file.name))?;
+                assert_eq!(file.0.hash.numeric(), info.file.hash);
+                if strings_present {
+                    assert_eq!(file.0.name, directory_key.name);
+                }
+
+                let decompressed_file = if file.1.is_compressed() {
+                    let options = FileOptions::builder().version(version).build();
+                    let result = file.1.decompress(&options).with_context(|| {
+                        format!("failed to decompress file: {}", info.file.name)
+                    })?;
+                    Some(result)
+                } else {
+                    None
+                };
+                let decompressed_bytes = decompressed_file.as_ref().unwrap_or(file.1).as_bytes();
+                assert_eq!(decompressed_bytes, &mapping[..]);
+            }
+
+            Ok(())
+        };
+
+        let versions = [Version::TES4, Version::FO3, Version::SSE];
+        let flags = [
+            ArchiveFlags::DIRECTORY_STRINGS,
+            ArchiveFlags::FILE_STRINGS,
+            ArchiveFlags::COMPRESSED,
+            ArchiveFlags::XBOX_ARCHIVE,
+            ArchiveFlags::EMBEDDED_FILE_NAMES,
+        ];
+
+        for version in versions {
+            for i in 0..flags.len() {
+                for j in i..flags.len() {
+                    let f = flags[i..=j]
+                        .iter()
+                        .copied()
+                        .reduce(|acc, x| acc.union(x))
+                        .unwrap();
+                    test(version, f).with_context(|| {
+                        format!("archive test failed for version ({version:?}) with flags ({f:?})")
+                    })?;
+                }
+            }
         }
 
         Ok(())
