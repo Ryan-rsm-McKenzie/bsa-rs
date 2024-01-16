@@ -14,14 +14,20 @@ use std::io;
 #[non_exhaustive]
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error(transparent)]
-    IntegralTruncation(#[from] TryFromIntError),
+    #[error("an operation on an integer would have truncated and corrupted data")]
+    IntegralTruncation,
 
     #[error("invalid magic read from file header: {0}")]
     InvalidMagic(u32),
 
     #[error(transparent)]
     Io(#[from] io::Error),
+}
+
+impl From<TryFromIntError> for Error {
+    fn from(_: TryFromIntError) -> Self {
+        Self::IntegralTruncation
+    }
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
