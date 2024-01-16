@@ -1,20 +1,20 @@
 macro_rules! reader {
     ($this:ident => $result:ident) => {
-        impl<'a> crate::Reader<crate::Borrowed<'a>> for $this<'a> {
+        impl<'bytes> crate::Reader<crate::Borrowed<'bytes>> for $this<'bytes> {
             type Error = Error;
-            type Item = $result<$this<'a>>;
+            type Item = $result<$this<'bytes>>;
 
-            fn read(source: crate::Borrowed<'a>) -> Result<Self::Item> {
+            fn read(source: crate::Borrowed<'bytes>) -> Result<Self::Item> {
                 let mut source = crate::io::BorrowedSource::from(source.0);
                 Self::do_read(&mut source)
             }
         }
 
-        impl<'a> crate::Reader<crate::Copied<'a>> for $this<'static> {
+        impl<'bytes> crate::Reader<crate::Copied<'bytes>> for $this<'static> {
             type Error = Error;
             type Item = $result<$this<'static>>;
 
-            fn read(source: crate::Copied<'a>) -> Result<Self::Item> {
+            fn read(source: crate::Copied<'bytes>) -> Result<Self::Item> {
                 let mut source = crate::io::CopiedSource::from(source.0);
                 Self::do_read(&mut source)
             }
@@ -48,9 +48,9 @@ macro_rules! container {
     ($this:ident => $result:ident) => {
         crate::derive::reader!($this => $result);
 
-		impl<'a> crate::Sealed for $this<'a> {}
+		impl<'bytes> crate::Sealed for $this<'bytes> {}
 
-        impl<'a> $this<'a> {
+        impl<'bytes> $this<'bytes> {
             #[must_use]
             pub fn as_bytes(&self) -> &[u8] {
                 self.container.as_bytes()
@@ -139,22 +139,22 @@ pub(crate) use key;
 
 macro_rules! mapping {
     ($this:ident, $mapping:ident: $key:ty => $value:ident) => {
-        pub(crate) type $mapping<'a> = ::std::collections::BTreeMap<$key, $value<'a>>;
+        pub(crate) type $mapping<'bytes> = ::std::collections::BTreeMap<$key, $value<'bytes>>;
 
-        impl<'a> crate::Sealed for $this<'a> {}
+        impl<'bytes> crate::Sealed for $this<'bytes> {}
 
         #[derive(::core::default::Default)]
-        pub struct $this<'a> {
-            pub(crate) map: $mapping<'a>,
+        pub struct $this<'bytes> {
+            pub(crate) map: $mapping<'bytes>,
         }
 
-        impl<'a> $this<'a> {
+        impl<'bytes> $this<'bytes> {
             pub fn clear(&mut self) {
                 self.map.clear();
             }
 
             #[must_use]
-            pub fn get<K>(&self, key: &K) -> ::core::option::Option<&$value<'a>>
+            pub fn get<K>(&self, key: &K) -> ::core::option::Option<&$value<'bytes>>
             where
                 K: ::core::borrow::Borrow<Hash>,
             {
@@ -162,7 +162,10 @@ macro_rules! mapping {
             }
 
             #[must_use]
-            pub fn get_key_value<K>(&self, key: &K) -> ::core::option::Option<(&$key, &$value<'a>)>
+            pub fn get_key_value<K>(
+                &self,
+                key: &K,
+            ) -> ::core::option::Option<(&$key, &$value<'bytes>)>
             where
                 K: ::core::borrow::Borrow<Hash>,
             {
@@ -170,7 +173,7 @@ macro_rules! mapping {
             }
 
             #[must_use]
-            pub fn get_mut<K>(&mut self, key: &K) -> ::core::option::Option<&mut $value<'a>>
+            pub fn get_mut<K>(&mut self, key: &K) -> ::core::option::Option<&mut $value<'bytes>>
             where
                 K: ::core::borrow::Borrow<Hash>,
             {
@@ -180,8 +183,8 @@ macro_rules! mapping {
             pub fn insert<K>(
                 &mut self,
                 key: K,
-                value: $value<'a>,
-            ) -> ::core::option::Option<$value<'a>>
+                value: $value<'bytes>,
+            ) -> ::core::option::Option<$value<'bytes>>
             where
                 K: ::core::convert::Into<$key>,
             {
@@ -193,13 +196,13 @@ macro_rules! mapping {
                 self.map.is_empty()
             }
 
-            pub fn iter(&self) -> impl ::core::iter::Iterator<Item = (&$key, &$value<'a>)> {
+            pub fn iter(&self) -> impl ::core::iter::Iterator<Item = (&$key, &$value<'bytes>)> {
                 self.map.iter()
             }
 
             pub fn iter_mut(
                 &mut self,
-            ) -> impl ::core::iter::Iterator<Item = (&$key, &mut $value<'a>)> {
+            ) -> impl ::core::iter::Iterator<Item = (&$key, &mut $value<'bytes>)> {
                 self.map.iter_mut()
             }
 
@@ -217,50 +220,55 @@ macro_rules! mapping {
                 Self::default()
             }
 
-            pub fn remove<K>(&mut self, key: &K) -> ::core::option::Option<$value<'a>>
+            pub fn remove<K>(&mut self, key: &K) -> ::core::option::Option<$value<'bytes>>
             where
                 K: ::core::borrow::Borrow<Hash>,
             {
                 self.map.remove(key.borrow())
             }
 
-            pub fn remove_entry<K>(&mut self, key: &K) -> ::core::option::Option<($key, $value<'a>)>
+            pub fn remove_entry<K>(
+                &mut self,
+                key: &K,
+            ) -> ::core::option::Option<($key, $value<'bytes>)>
             where
                 K: ::core::borrow::Borrow<Hash>,
             {
                 self.map.remove_entry(key.borrow())
             }
 
-            pub fn values(&self) -> impl ::core::iter::Iterator<Item = &$value<'a>> {
+            pub fn values(&self) -> impl ::core::iter::Iterator<Item = &$value<'bytes>> {
                 self.map.values()
             }
 
-            pub fn values_mut(&mut self) -> impl ::core::iter::Iterator<Item = &mut $value<'a>> {
+            pub fn values_mut(
+                &mut self,
+            ) -> impl ::core::iter::Iterator<Item = &mut $value<'bytes>> {
                 self.map.values_mut()
             }
         }
 
-        impl<'a> ::core::iter::IntoIterator for $this<'a> {
-            type Item = <$mapping<'a> as ::core::iter::IntoIterator>::Item;
-            type IntoIter = <$mapping<'a> as ::core::iter::IntoIterator>::IntoIter;
+        impl<'bytes> ::core::iter::IntoIterator for $this<'bytes> {
+            type Item = <$mapping<'bytes> as ::core::iter::IntoIterator>::Item;
+            type IntoIter = <$mapping<'bytes> as ::core::iter::IntoIterator>::IntoIter;
 
             fn into_iter(self) -> Self::IntoIter {
                 self.map.into_iter()
             }
         }
 
-        impl<'a, 'b> ::core::iter::IntoIterator for &'b $this<'a> {
-            type Item = <&'b $mapping<'a> as ::core::iter::IntoIterator>::Item;
-            type IntoIter = <&'b $mapping<'a> as ::core::iter::IntoIterator>::IntoIter;
+        impl<'bytes, 'this> ::core::iter::IntoIterator for &'this $this<'bytes> {
+            type Item = <&'this $mapping<'bytes> as ::core::iter::IntoIterator>::Item;
+            type IntoIter = <&'this $mapping<'bytes> as ::core::iter::IntoIterator>::IntoIter;
 
             fn into_iter(self) -> Self::IntoIter {
                 self.map.iter()
             }
         }
 
-        impl<'a, 'b> ::core::iter::IntoIterator for &'b mut $this<'a> {
-            type Item = <&'b mut $mapping<'a> as ::core::iter::IntoIterator>::Item;
-            type IntoIter = <&'b mut $mapping<'a> as ::core::iter::IntoIterator>::IntoIter;
+        impl<'bytes, 'this> ::core::iter::IntoIterator for &'this mut $this<'bytes> {
+            type Item = <&'this mut $mapping<'bytes> as ::core::iter::IntoIterator>::Item;
+            type IntoIter = <&'this mut $mapping<'bytes> as ::core::iter::IntoIterator>::IntoIter;
 
             fn into_iter(self) -> Self::IntoIter {
                 self.map.iter_mut()

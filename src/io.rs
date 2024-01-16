@@ -14,13 +14,13 @@ pub enum Endian {
     Native,
 }
 
-pub trait Source<'a> {
+pub trait Source<'bytes> {
     fn read_bytes(&mut self, buf: &mut [u8]) -> io::Result<()>;
 
-    fn read_container(&mut self, len: usize) -> io::Result<ByteContainer<'a>>;
+    fn read_container(&mut self, len: usize) -> io::Result<ByteContainer<'bytes>>;
 
     #[must_use]
-    fn read_to_end(&mut self) -> ByteContainer<'a>;
+    fn read_to_end(&mut self) -> ByteContainer<'bytes>;
 
     fn seek_absolute(&mut self, pos: usize) -> io::Result<()>;
 
@@ -61,8 +61,8 @@ pub trait Source<'a> {
 }
 
 macro_rules! make_sourceable {
-    ($this:ty, $container_lifetime:lifetime $(,$this_lifetime:lifetime)?) => {
-        impl $(<$this_lifetime>)? Source<$container_lifetime> for $this {
+    ($this:ty, $bytes_lifetime:lifetime $(,$this_lifetime:lifetime)?) => {
+        impl $(<$this_lifetime>)? Source<$bytes_lifetime> for $this {
             fn read_bytes(&mut self, buf: &mut [u8]) -> io::Result<()> {
                 let len = buf.len();
                 let start = self.pos;
@@ -76,7 +76,7 @@ macro_rules! make_sourceable {
                 }
             }
 
-            fn read_container(&mut self, len: usize) -> io::Result<ByteContainer<$container_lifetime>> {
+            fn read_container(&mut self, len: usize) -> io::Result<ByteContainer<$bytes_lifetime>> {
                 let start = self.pos;
                 let stop = start + len;
                 if stop > self.source.len() {
@@ -87,7 +87,7 @@ macro_rules! make_sourceable {
                 }
             }
 
-			fn read_to_end(&mut self) -> ByteContainer<$container_lifetime> {
+			fn read_to_end(&mut self) -> ByteContainer<$bytes_lifetime> {
 				let len = self.source.len();
 				let start = self.pos;
 				let stop = len - start;
@@ -110,45 +110,45 @@ macro_rules! make_sourceable {
     };
 }
 
-pub struct BorrowedSource<'a> {
-    source: &'a [u8],
+pub struct BorrowedSource<'bytes> {
+    source: &'bytes [u8],
     pos: usize,
 }
 
-impl<'a> BorrowedSource<'a> {
+impl<'bytes> BorrowedSource<'bytes> {
     #[must_use]
-    fn make_container(&self, range: Range<usize>) -> ByteContainer<'a> {
+    fn make_container(&self, range: Range<usize>) -> ByteContainer<'bytes> {
         ByteContainer::from_borrowed(&self.source[range])
     }
 }
 
-impl<'a> From<&'a [u8]> for BorrowedSource<'a> {
-    fn from(source: &'a [u8]) -> Self {
+impl<'bytes> From<&'bytes [u8]> for BorrowedSource<'bytes> {
+    fn from(source: &'bytes [u8]) -> Self {
         Self { source, pos: 0 }
     }
 }
 
-make_sourceable!(BorrowedSource<'a>, 'a, 'a);
+make_sourceable!(BorrowedSource<'bytes>, 'bytes, 'bytes);
 
-pub struct CopiedSource<'a> {
-    source: &'a [u8],
+pub struct CopiedSource<'bytes> {
+    source: &'bytes [u8],
     pos: usize,
 }
 
-impl<'a> CopiedSource<'a> {
+impl<'bytes> CopiedSource<'bytes> {
     #[must_use]
     fn make_container(&self, range: Range<usize>) -> ByteContainer<'static> {
         ByteContainer::from_owned(self.source[range].to_vec())
     }
 }
 
-impl<'a> From<&'a [u8]> for CopiedSource<'a> {
-    fn from(source: &'a [u8]) -> Self {
+impl<'bytes> From<&'bytes [u8]> for CopiedSource<'bytes> {
+    fn from(source: &'bytes [u8]) -> Self {
         Self { source, pos: 0 }
     }
 }
 
-make_sourceable!(CopiedSource<'a>, 'static, 'a);
+make_sourceable!(CopiedSource<'bytes>, 'static, 'bytes);
 
 pub struct MappedSource {
     source: Arc<Mmap>,
@@ -180,27 +180,27 @@ make_sourceable!(MappedSource, 'static);
 pub trait BinaryReadable {
     type Item;
 
-    fn from_ne_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+    fn from_ne_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
     where
-        I: ?Sized + Source<'a>;
+        In: ?Sized + Source<'bytes>;
 
-    fn from_be_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+    fn from_be_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         Self::from_ne_stream(stream)
     }
 
-    fn from_le_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+    fn from_le_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         Self::from_ne_stream(stream)
     }
 
-    fn from_stream<'a, I>(stream: &mut I, endian: Endian) -> io::Result<Self::Item>
+    fn from_stream<'bytes, In>(stream: &mut In, endian: Endian) -> io::Result<Self::Item>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         match endian {
             Endian::Big => Self::from_be_stream(stream),
@@ -213,28 +213,27 @@ pub trait BinaryReadable {
 pub trait BinaryWriteable {
     type Item: ?Sized;
 
-    fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+    fn to_ne_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
     where
-        O: ?Sized + Write;
+        Out: ?Sized + Write;
 
-    fn to_be_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+    fn to_be_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
     where
-        O: ?Sized + Write,
+        Out: ?Sized + Write,
     {
         Self::to_ne_stream(stream, item)
     }
 
-    fn to_le_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+    fn to_le_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
     where
-        O: ?Sized + Write,
+        Out: ?Sized + Write,
     {
         Self::to_ne_stream(stream, item)
     }
 
-    fn to_stream<O>(stream: &mut O, item: &Self::Item, endian: Endian) -> io::Result<()>
+    fn to_stream<Out>(stream: &mut Out, item: &Self::Item, endian: Endian) -> io::Result<()>
     where
-        Self: Sized,
-        O: ?Sized + Write,
+        Out: ?Sized + Write,
     {
         match endian {
             Endian::Big => Self::to_be_stream(stream, item),
@@ -249,27 +248,27 @@ macro_rules! make_binary_streamable {
         impl BinaryReadable for $t {
             type Item = $t;
 
-            fn from_be_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+            fn from_be_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
             where
-                I: ?Sized + Source<'a>,
+                In: ?Sized + Source<'bytes>,
             {
                 let mut bytes = [0u8; mem::size_of::<Self::Item>()];
                 stream.read_bytes(&mut bytes)?;
                 Ok(Self::from_be_bytes(bytes))
             }
 
-            fn from_le_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+            fn from_le_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
             where
-                I: ?Sized + Source<'a>,
+                In: ?Sized + Source<'bytes>,
             {
                 let mut bytes = [0u8; mem::size_of::<Self::Item>()];
                 stream.read_bytes(&mut bytes)?;
                 Ok(Self::from_le_bytes(bytes))
             }
 
-            fn from_ne_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+            fn from_ne_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
             where
-                I: ?Sized + Source<'a>,
+                In: ?Sized + Source<'bytes>,
             {
                 let mut bytes = [0u8; mem::size_of::<Self::Item>()];
                 stream.read_bytes(&mut bytes)?;
@@ -280,25 +279,25 @@ macro_rules! make_binary_streamable {
         impl BinaryWriteable for $t {
             type Item = $t;
 
-            fn to_be_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+            fn to_be_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
             where
-                O: ?Sized + Write,
+                Out: ?Sized + Write,
             {
                 let mut bytes = item.to_be_bytes();
                 stream.write_all(&mut bytes)
             }
 
-            fn to_le_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+            fn to_le_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
             where
-                O: ?Sized + Write,
+                Out: ?Sized + Write,
             {
                 let mut bytes = item.to_le_bytes();
                 stream.write_all(&mut bytes)
             }
 
-            fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+            fn to_ne_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
             where
-                O: ?Sized + Write,
+                Out: ?Sized + Write,
             {
                 let mut bytes = item.to_ne_bytes();
                 stream.write_all(&mut bytes)
@@ -325,27 +324,27 @@ macro_rules! make_binary_streamable_tuple {
         {
             type Item = ($($t::Item,)+);
 
-            fn from_be_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+            fn from_be_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
 			where
-				I: ?Sized + Source<'a>,
+				In: ?Sized + Source<'bytes>,
 			{
                 Ok(($(
                     $t::from_be_stream(stream)?,
                 )+))
             }
 
-            fn from_le_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+            fn from_le_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
 			where
-				I: ?Sized + Source<'a>,
+				In: ?Sized + Source<'bytes>,
 			{
                 Ok(($(
                     $t::from_le_stream(stream)?,
                 )+))
             }
 
-            fn from_ne_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+            fn from_ne_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
 			where
-				I: ?Sized + Source<'a>,
+				In: ?Sized + Source<'bytes>,
 			{
                 Ok(($(
                     $t::from_ne_stream(stream)?,
@@ -359,9 +358,9 @@ macro_rules! make_binary_streamable_tuple {
 		{
 			type Item = ($($t::Item,)+);
 
-            fn to_be_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+            fn to_be_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
 			where
-				O: ?Sized + Write,
+				Out: ?Sized + Write,
 			{
                 $(
                     $t::to_be_stream(stream, &item.$idx)?;
@@ -369,9 +368,9 @@ macro_rules! make_binary_streamable_tuple {
                 Ok(())
             }
 
-            fn to_le_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+            fn to_le_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
 			where
-				O: ?Sized + Write,
+				Out: ?Sized + Write,
 			{
                 $(
                     $t::to_le_stream(stream, &item.$idx)?;
@@ -379,9 +378,9 @@ macro_rules! make_binary_streamable_tuple {
                 Ok(())
             }
 
-            fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+            fn to_ne_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
 			where
-				O: ?Sized + Write,
+				Out: ?Sized + Write,
 			{
                 $(
                     $t::to_ne_stream(stream, &item.$idx)?;
@@ -403,19 +402,19 @@ make_binary_streamable_tuple!(0 T0, 1 T1, 2 T2, 3 T3, 4 T4, 5 T5, 6 T6, 7 T7);
 make_binary_streamable_tuple!(0 T0, 1 T1, 2 T2, 3 T3, 4 T4, 5 T5, 6 T6, 7 T7, 8 T8);
 make_binary_streamable_tuple!(0 T0, 1 T1, 2 T2, 3 T3, 4 T4, 5 T5, 6 T6, 7 T7, 8 T8, 9 T9);
 
-pub struct Sink<'a, R>
+pub struct Sink<'stream, Out>
 where
-    R: Write,
+    Out: Write,
 {
-    stream: &'a mut R,
+    stream: &'stream mut Out,
 }
 
-impl<'a, R> Sink<'a, R>
+impl<'stream, Out> Sink<'stream, Out>
 where
-    R: Write,
+    Out: Write,
 {
     #[must_use]
-    pub fn new(stream: &'a mut R) -> Self {
+    pub fn new(stream: &'stream mut Out) -> Self {
         Self { stream }
     }
 

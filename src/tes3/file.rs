@@ -7,26 +7,26 @@ use crate::{
 use std::io::Write;
 
 #[derive(Default)]
-pub struct File<'a> {
-    pub(crate) container: ByteContainer<'a>,
+pub struct File<'bytes> {
+    pub(crate) container: ByteContainer<'bytes>,
 }
 
 type ReadResult<T> = T;
 derive::container!(File => ReadResult);
 
-impl<'a> File<'a> {
-    pub fn write<O>(&self, stream: &mut O) -> Result<()>
+impl<'bytes> File<'bytes> {
+    pub fn write<Out>(&self, stream: &mut Out) -> Result<()>
     where
-        O: ?Sized + Write,
+        Out: ?Sized + Write,
     {
         stream.write_all(self.as_bytes())?;
         Ok(())
     }
 
     #[allow(clippy::unnecessary_wraps)]
-    fn do_read<I>(stream: &mut I) -> Result<ReadResult<Self>>
+    fn do_read<In>(stream: &mut In) -> Result<ReadResult<Self>>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         Ok(Self {
             container: stream.read_to_end(),
@@ -34,8 +34,8 @@ impl<'a> File<'a> {
     }
 }
 
-impl<'a> From<&'a [u8]> for File<'a> {
-    fn from(value: &'a [u8]) -> Self {
+impl<'bytes> From<&'bytes [u8]> for File<'bytes> {
+    fn from(value: &'bytes [u8]) -> Self {
         Self {
             container: ByteContainer::from_borrowed(value),
         }

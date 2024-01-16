@@ -249,10 +249,10 @@ pub struct Options {
 type ReadResult<T> = (T, Options);
 derive::archive!(Archive => ReadResult, Map: Key => Directory);
 
-impl<'a> Archive<'a> {
-    pub fn write<O>(&self, stream: &mut O, options: &Options) -> Result<()>
+impl<'bytes> Archive<'bytes> {
+    pub fn write<Out>(&self, stream: &mut Out, options: &Options) -> Result<()>
     where
-        O: Write,
+        Out: Write,
     {
         let mut sink = Sink::new(stream);
         let header = self.make_header(*options)?;
@@ -300,8 +300,8 @@ impl<'a> Archive<'a> {
 
     fn sort_files_for_write<'dir>(
         options: Options,
-        directory: &'dir Directory<'a>,
-        files: &mut Vec<(&'dir DirectoryKey, &'dir File<'a>)>,
+        directory: &'dir Directory<'bytes>,
+        files: &mut Vec<(&'dir DirectoryKey, &'dir File<'bytes>)>,
     ) {
         files.clear();
         files.extend(directory.iter());
@@ -310,10 +310,10 @@ impl<'a> Archive<'a> {
         }
     }
 
-    fn concat_directory_and_file_name<'s>(
-        directory: &'s Key,
-        file: &'s DirectoryKey,
-    ) -> Cow<'s, BStr> {
+    fn concat_directory_and_file_name<'string>(
+        directory: &'string Key,
+        file: &'string DirectoryKey,
+    ) -> Cow<'string, BStr> {
         let directory = &directory.name;
         let file = &file.name;
 
@@ -342,14 +342,14 @@ impl<'a> Archive<'a> {
         }
     }
 
-    fn write_directories_in_order<O>(
+    fn write_directories_in_order<Out>(
         &self,
-        sink: &mut Sink<O>,
+        sink: &mut Sink<Out>,
         header: &Header,
         options: Options,
     ) -> Result<()>
     where
-        O: Write,
+        Out: Write,
     {
         let offsets = header.compute_offsets();
         // let mut file_entries_offset = offsets.file_entries + header.file_names_len;
@@ -421,15 +421,15 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_directory_entry<O>(
-        sink: &mut Sink<O>,
+    fn write_directory_entry<Out>(
+        sink: &mut Sink<Out>,
         options: Options,
         key: &Key,
-        directory: &Directory<'a>,
+        directory: &Directory<'bytes>,
         file_entries_offset: &mut u32,
     ) -> Result<()>
     where
-        O: Write,
+        Out: Write,
     {
         Self::write_hash(sink, options, key.hash)?;
 
@@ -468,13 +468,13 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_file_data<O>(
-        sink: &mut Sink<O>,
-        file: &File<'a>,
+    fn write_file_data<Out>(
+        sink: &mut Sink<Out>,
+        file: &File<'bytes>,
         embedded_file_name: Option<&Cow<'_, BStr>>,
     ) -> Result<()>
     where
-        O: Write,
+        Out: Write,
     {
         if let Some(name) = embedded_file_name {
             sink.write_protocol::<protocols::BString>(name, Endian::Little)?;
@@ -489,16 +489,16 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_file_entry<O>(
-        sink: &mut Sink<O>,
+    fn write_file_entry<Out>(
+        sink: &mut Sink<Out>,
         options: Options,
         key: &DirectoryKey,
-        file: &File<'a>,
+        file: &File<'bytes>,
         file_data_offset: &mut u32,
         embedded_file_name: Option<&Cow<'_, BStr>>,
     ) -> Result<()>
     where
-        O: Write,
+        Out: Write,
     {
         Self::write_hash(sink, options, key.hash)?;
 
@@ -534,9 +534,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_hash<O>(sink: &mut Sink<O>, options: Options, hash: Hash) -> Result<()>
+    fn write_hash<Out>(sink: &mut Sink<Out>, options: Options, hash: Hash) -> Result<()>
     where
-        O: Write,
+        Out: Write,
     {
         sink.write(
             &(hash.last, hash.last2, hash.length, hash.first),
@@ -553,9 +553,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_header<O>(sink: &mut Sink<O>, header: &Header) -> Result<()>
+    fn write_header<Out>(sink: &mut Sink<Out>, header: &Header) -> Result<()>
     where
-        O: Write,
+        Out: Write,
     {
         sink.write(
             &(
@@ -575,9 +575,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn do_read<I>(source: &mut I) -> Result<ReadResult<Self>>
+    fn do_read<In>(source: &mut In) -> Result<ReadResult<Self>>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         let header = Self::read_header(source)?;
         let mut offsets = header.compute_offsets();
@@ -598,13 +598,13 @@ impl<'a> Archive<'a> {
         ))
     }
 
-    fn read_directory<I>(
-        source: &mut I,
+    fn read_directory<In>(
+        source: &mut In,
         header: &Header,
         offsets: &mut Offsets,
-    ) -> Result<(Key, Directory<'a>)>
+    ) -> Result<(Key, Directory<'bytes>)>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         let hash = Self::read_hash(source, header.hash_endian())?;
         let file_count: u32 = source.read(Endian::Little)?;
@@ -616,7 +616,7 @@ impl<'a> Archive<'a> {
 
         let mut map = DirectoryMap::default();
         let (name, directory) =
-            source.save_restore_position(|source| -> Result<(BString, Directory<'a>)> {
+            source.save_restore_position(|source| -> Result<(BString, Directory<'bytes>)> {
                 source.seek_absolute(offsets.file_entries)?;
                 let mut name = if header.archive_flags.directory_strings() {
                     Some(source.read_protocol::<BZString>(Endian::Little)?)
@@ -634,14 +634,14 @@ impl<'a> Archive<'a> {
         Ok((Key { hash, name }, directory))
     }
 
-    fn read_file_entry<I>(
-        source: &mut I,
+    fn read_file_entry<In>(
+        source: &mut In,
         header: &Header,
         offsets: &mut Offsets,
         directory_name: &mut Option<BString>,
-    ) -> Result<(DirectoryKey, File<'a>)>
+    ) -> Result<(DirectoryKey, File<'bytes>)>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         let hash = Self::read_hash(source, header.hash_endian())?;
         let (compression_flipped, mut data_size, data_offset) = {
@@ -665,8 +665,8 @@ impl<'a> Archive<'a> {
             None
         };
 
-        let container =
-            source.save_restore_position(|source| -> Result<CompressableByteContainer<'a>> {
+        let container = source.save_restore_position(
+            |source| -> Result<CompressableByteContainer<'bytes>> {
                 source.seek_absolute(data_offset)?;
 
                 match header.version {
@@ -700,7 +700,8 @@ impl<'a> Archive<'a> {
                     .read_container(data_size)?
                     .into_compressable(decompressed_len);
                 Ok(container)
-            })??;
+            },
+        )??;
 
         Ok((
             DirectoryKey {
@@ -711,9 +712,9 @@ impl<'a> Archive<'a> {
         ))
     }
 
-    fn read_hash<I>(source: &mut I, endian: Endian) -> Result<Hash>
+    fn read_hash<In>(source: &mut In, endian: Endian) -> Result<Hash>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         let (last, last2, length, first, crc) = source.read(endian)?;
         Ok(Hash {
@@ -725,9 +726,9 @@ impl<'a> Archive<'a> {
         })
     }
 
-    fn read_header<I>(source: &mut I) -> Result<Header>
+    fn read_header<In>(source: &mut In) -> Result<Header>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         let (
             magic,

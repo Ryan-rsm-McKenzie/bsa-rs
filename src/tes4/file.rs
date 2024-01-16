@@ -20,14 +20,14 @@ pub struct CompressionOptions {
 }
 
 #[derive(Default)]
-pub struct File<'a> {
-    pub(crate) container: CompressableByteContainer<'a>,
+pub struct File<'bytes> {
+    pub(crate) container: CompressableByteContainer<'bytes>,
 }
 
 type ReadResult<T> = T;
 derive::container!(File => ReadResult);
 
-impl<'a> File<'a> {
+impl<'bytes> File<'bytes> {
     pub fn compress(&self, options: &CompressionOptions) -> Result<File<'static>> {
         let mut bytes = Vec::new();
         self.compress_into(&mut bytes, options)?;
@@ -99,9 +99,9 @@ impl<'a> File<'a> {
         !self.is_compressed()
     }
 
-    pub fn write<O>(&self, stream: &mut O, options: &CompressionOptions) -> Result<()>
+    pub fn write<Out>(&self, stream: &mut Out, options: &CompressionOptions) -> Result<()>
     where
-        O: ?Sized + Write,
+        Out: ?Sized + Write,
     {
         if self.is_compressed() {
             let mut bytes = Vec::new();
@@ -115,9 +115,9 @@ impl<'a> File<'a> {
     }
 
     #[allow(clippy::unnecessary_wraps)]
-    fn do_read<I>(stream: &mut I) -> Result<ReadResult<Self>>
+    fn do_read<In>(stream: &mut In) -> Result<ReadResult<Self>>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         Ok(Self {
             container: stream.read_to_end().into_compressable(None),
@@ -152,14 +152,14 @@ impl<'a> File<'a> {
     }
 }
 
-impl<'a> CompressableFrom<&'a [u8]> for File<'a> {
-    fn from_compressed(value: &'a [u8], decompressed_len: usize) -> Self {
+impl<'bytes> CompressableFrom<&'bytes [u8]> for File<'bytes> {
+    fn from_compressed(value: &'bytes [u8], decompressed_len: usize) -> Self {
         Self {
             container: CompressableByteContainer::from_borrowed(value, Some(decompressed_len)),
         }
     }
 
-    fn from_decompressed(value: &'a [u8]) -> Self {
+    fn from_decompressed(value: &'bytes [u8]) -> Self {
         Self {
             container: CompressableByteContainer::from_borrowed(value, None),
         }

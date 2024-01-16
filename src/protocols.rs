@@ -22,9 +22,9 @@ pub struct BString;
 impl BinaryReadable for BString {
     type Item = ByteString;
 
-    fn from_ne_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+    fn from_ne_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         let len: u8 = stream.read(Endian::Native)?;
         let mut result = Vec::new();
@@ -38,9 +38,9 @@ impl BinaryReadable for BString {
 impl BinaryWriteable for BString {
     type Item = ByteStr;
 
-    fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+    fn to_ne_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
     where
-        O: ?Sized + Write,
+        Out: ?Sized + Write,
     {
         let len: Result<u8, _> = item.len().try_into();
         match len {
@@ -59,9 +59,9 @@ pub struct ZString;
 impl BinaryReadable for ZString {
     type Item = ByteString;
 
-    fn from_ne_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+    fn from_ne_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         let mut result = Vec::new();
         loop {
@@ -80,9 +80,9 @@ impl BinaryReadable for ZString {
 impl BinaryWriteable for ZString {
     type Item = ByteStr;
 
-    fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+    fn to_ne_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
     where
-        O: ?Sized + Write,
+        Out: ?Sized + Write,
     {
         stream.write_all(item)?;
         stream.write_all(b"\0")?;
@@ -95,9 +95,9 @@ pub struct BZString;
 impl BinaryReadable for BZString {
     type Item = ByteString;
 
-    fn from_ne_stream<'a, I>(stream: &mut I) -> io::Result<Self::Item>
+    fn from_ne_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         let len: u8 = stream.read(Endian::Native)?;
         if len > 0 {
@@ -120,9 +120,9 @@ impl BinaryReadable for BZString {
 impl BinaryWriteable for BZString {
     type Item = ByteStr;
 
-    fn to_ne_stream<O>(stream: &mut O, item: &Self::Item) -> io::Result<()>
+    fn to_ne_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
     where
-        O: ?Sized + Write,
+        Out: ?Sized + Write,
     {
         let len: Result<u8, _> = (item.len() + 1).try_into();
         match len {

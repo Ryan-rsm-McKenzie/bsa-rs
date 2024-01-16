@@ -29,19 +29,19 @@ impl Mapping {
     }
 }
 
-enum ByteContainerInner<'a> {
+enum ByteContainerInner<'bytes> {
     Owned(Vec<u8>),
-    Borrowed(&'a [u8]),
+    Borrowed(&'bytes [u8]),
     Mapped(Mapping),
 }
 
 use ByteContainerInner::*;
 
-pub struct ByteContainer<'a> {
-    inner: ByteContainerInner<'a>,
+pub struct ByteContainer<'bytes> {
+    inner: ByteContainerInner<'bytes>,
 }
 
-impl<'a> ByteContainer<'a> {
+impl<'bytes> ByteContainer<'bytes> {
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         match &self.inner {
@@ -61,7 +61,7 @@ impl<'a> ByteContainer<'a> {
     }
 
     #[must_use]
-    pub fn from_borrowed(bytes: &'a [u8]) -> Self {
+    pub fn from_borrowed(bytes: &'bytes [u8]) -> Self {
         Self {
             inner: Borrowed(bytes),
         }
@@ -100,7 +100,7 @@ impl<'a> ByteContainer<'a> {
     pub fn into_compressable(
         self,
         decompressed_len: Option<usize>,
-    ) -> CompressableByteContainer<'a> {
+    ) -> CompressableByteContainer<'bytes> {
         CompressableByteContainer {
             inner: match (self.inner, decompressed_len) {
                 (Owned(x), Some(len)) => OwnedCompressed(x, len),
@@ -130,7 +130,7 @@ impl ByteContainer<'static> {
     }
 }
 
-impl<'a> Default for ByteContainer<'a> {
+impl<'bytes> Default for ByteContainer<'bytes> {
     fn default() -> Self {
         Self {
             inner: Owned(Vec::new()),
@@ -138,22 +138,22 @@ impl<'a> Default for ByteContainer<'a> {
     }
 }
 
-enum CompressableByteContainerInner<'a> {
+enum CompressableByteContainerInner<'bytes> {
     OwnedDecompressed(Vec<u8>),
     OwnedCompressed(Vec<u8>, usize),
-    BorrowedDecompressed(&'a [u8]),
-    BorrowedCompressed(&'a [u8], usize),
+    BorrowedDecompressed(&'bytes [u8]),
+    BorrowedCompressed(&'bytes [u8], usize),
     MappedDecompressed(Mapping),
     MappedCompressed(Mapping, usize),
 }
 
 use CompressableByteContainerInner::*;
 
-pub struct CompressableByteContainer<'a> {
-    inner: CompressableByteContainerInner<'a>,
+pub struct CompressableByteContainer<'bytes> {
+    inner: CompressableByteContainerInner<'bytes>,
 }
 
-impl<'a> CompressableByteContainer<'a> {
+impl<'bytes> CompressableByteContainer<'bytes> {
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         match &self.inner {
@@ -173,7 +173,7 @@ impl<'a> CompressableByteContainer<'a> {
     }
 
     #[must_use]
-    pub fn from_borrowed(bytes: &'a [u8], decompressed_len: Option<usize>) -> Self {
+    pub fn from_borrowed(bytes: &'bytes [u8], decompressed_len: Option<usize>) -> Self {
         Self {
             inner: match decompressed_len {
                 Some(len) => BorrowedCompressed(bytes, len),
@@ -243,7 +243,7 @@ impl CompressableByteContainer<'static> {
     }
 }
 
-impl<'a> Default for CompressableByteContainer<'a> {
+impl<'bytes> Default for CompressableByteContainer<'bytes> {
     fn default() -> Self {
         Self {
             inner: OwnedDecompressed(Vec::new()),

@@ -56,10 +56,10 @@ impl Key {
 type ReadResult<T> = (T,);
 derive::archive!(Archive => ReadResult, Map: Key => File);
 
-impl<'a> Archive<'a> {
-    pub fn write<O>(&self, stream: &mut O) -> Result<()>
+impl<'bytes> Archive<'bytes> {
+    pub fn write<Out>(&self, stream: &mut Out) -> Result<()>
     where
-        O: Write,
+        Out: Write,
     {
         let mut sink = Sink::new(stream);
         let header = self.make_header()?;
@@ -73,9 +73,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn do_read<I>(source: &mut I) -> Result<ReadResult<Self>>
+    fn do_read<In>(source: &mut In) -> Result<ReadResult<Self>>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         let header = Self::read_header(source)?;
         let offsets = header.compute_offsets();
@@ -89,9 +89,9 @@ impl<'a> Archive<'a> {
         Ok((Self { map },))
     }
 
-    fn read_file<I>(source: &mut I, idx: usize, offsets: &Offsets) -> Result<(Key, File<'a>)>
+    fn read_file<In>(source: &mut In, idx: usize, offsets: &Offsets) -> Result<(Key, File<'bytes>)>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         let hash = source.save_restore_position(|source| -> Result<Hash> {
             source.seek_absolute(offsets.hashes + constants::HASH_SIZE * idx)?;
@@ -107,26 +107,27 @@ impl<'a> Archive<'a> {
         })??;
 
         let (size, offset): (u32, u32) = source.read(Endian::Little)?;
-        let container = source.save_restore_position(|source| -> Result<ByteContainer<'a>> {
-            source.seek_absolute(offsets.file_data + offset as usize)?;
-            let result = source.read_container(size as usize)?;
-            Ok(result)
-        })??;
+        let container =
+            source.save_restore_position(|source| -> Result<ByteContainer<'bytes>> {
+                source.seek_absolute(offsets.file_data + offset as usize)?;
+                let result = source.read_container(size as usize)?;
+                Ok(result)
+            })??;
 
         Ok((Key { hash, name }, File { container }))
     }
 
-    fn read_hash<I>(source: &mut I) -> Result<Hash>
+    fn read_hash<In>(source: &mut In) -> Result<Hash>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         let (lo, hi) = source.read(Endian::Little)?;
         Ok(Hash { lo, hi })
     }
 
-    fn read_header<I>(source: &mut I) -> Result<Header>
+    fn read_header<In>(source: &mut In) -> Result<Header>
     where
-        I: ?Sized + Source<'a>,
+        In: ?Sized + Source<'bytes>,
     {
         let (magic, hash_offset, file_count) = source.read(Endian::Little)?;
         match magic {
@@ -149,9 +150,9 @@ impl<'a> Archive<'a> {
         })
     }
 
-    fn write_files<O>(&self, sink: &mut Sink<O>) -> Result<()>
+    fn write_files<Out>(&self, sink: &mut Sink<Out>) -> Result<()>
     where
-        O: Write,
+        Out: Write,
     {
         let mut offset: u32 = 0;
         for file in self.map.values() {
@@ -163,9 +164,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_file_data<O>(&self, sink: &mut Sink<O>) -> Result<()>
+    fn write_file_data<Out>(&self, sink: &mut Sink<Out>) -> Result<()>
     where
-        O: Write,
+        Out: Write,
     {
         for file in self.map.values() {
             sink.write_bytes(file.as_bytes())?;
@@ -174,9 +175,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_hashes<O>(&self, sink: &mut Sink<O>) -> Result<()>
+    fn write_hashes<Out>(&self, sink: &mut Sink<Out>) -> Result<()>
     where
-        O: Write,
+        Out: Write,
     {
         for key in self.map.keys() {
             let hash = &key.hash;
@@ -186,9 +187,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_header<O>(sink: &mut Sink<O>, header: &Header) -> Result<()>
+    fn write_header<Out>(sink: &mut Sink<Out>, header: &Header) -> Result<()>
     where
-        O: Write,
+        Out: Write,
     {
         sink.write(
             &(
@@ -201,9 +202,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_name_offsets<O>(&self, sink: &mut Sink<O>) -> Result<()>
+    fn write_name_offsets<Out>(&self, sink: &mut Sink<Out>) -> Result<()>
     where
-        O: Write,
+        Out: Write,
     {
         let mut offset: u32 = 0;
         for key in self.map.keys() {
@@ -214,9 +215,9 @@ impl<'a> Archive<'a> {
         Ok(())
     }
 
-    fn write_names<O>(&self, sink: &mut Sink<O>) -> Result<()>
+    fn write_names<Out>(&self, sink: &mut Sink<Out>) -> Result<()>
     where
-        O: Write,
+        Out: Write,
     {
         for key in self.map.keys() {
             sink.write_protocol::<ZString>(key.name.as_ref(), Endian::Little)?;

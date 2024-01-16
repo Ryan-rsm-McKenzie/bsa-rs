@@ -1,4 +1,8 @@
-#![warn(clippy::pedantic, clippy::std_instead_of_core)]
+#![warn(
+    clippy::pedantic,
+    clippy::single_char_lifetime_names,
+    clippy::std_instead_of_core
+)]
 #![allow(clippy::enum_glob_use, clippy::missing_errors_doc)]
 
 mod cc;
@@ -10,9 +14,9 @@ mod protocols;
 pub mod tes3;
 pub mod tes4;
 
-pub struct Borrowed<'a>(pub &'a [u8]);
+pub struct Borrowed<'borrow>(pub &'borrow [u8]);
 
-pub struct Copied<'a>(pub &'a [u8]);
+pub struct Copied<'copy>(pub &'copy [u8]);
 
 mod private {
     pub trait Sealed {}
