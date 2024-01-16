@@ -924,15 +924,15 @@ mod tests {
 
         let (normal, normal_options) = Archive::read(root.join("normal.bsa").as_path())
             .context("failed to read normal archive")?;
-        assert!(!normal_options.flags.xbox_archive());
-        assert!(!normal_options.flags.xbox_compressed());
-        assert!(!normal_options.flags.compressed());
+        assert!(!normal_options.flags().xbox_archive());
+        assert!(!normal_options.flags().xbox_compressed());
+        assert!(!normal_options.flags().compressed());
 
         let (xbox, xbox_options) = Archive::read(root.join("xbox.bsa").as_path())
             .context("failed to read xbox archive")?;
-        assert!(xbox_options.flags.xbox_archive());
-        assert!(!xbox_options.flags.xbox_compressed());
-        assert!(!xbox_options.flags.compressed());
+        assert!(xbox_options.flags().xbox_archive());
+        assert!(!xbox_options.flags().xbox_compressed());
+        assert!(!xbox_options.flags().compressed());
 
         assert_eq!(normal.len(), xbox.len());
         for (directory_normal, directory_xbox) in normal.iter().zip(xbox) {
@@ -987,7 +987,7 @@ mod tests {
         let root = Path::new("data/tes4_compression_mismatch_test");
         let (bsa, options) =
             Archive::read(root.join("test.bsa").as_path()).context("failed to read archive")?;
-        assert!(options.flags.compressed());
+        assert!(options.flags().compressed());
 
         let files = ["License.txt", "SampleA.png"];
         let directory = bsa
