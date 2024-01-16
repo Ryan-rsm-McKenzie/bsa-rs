@@ -229,6 +229,18 @@ impl Header {
     }
 }
 
+struct SortedFile<'this, 'bytes> {
+    key: &'this DirectoryKey,
+    this: &'this File<'bytes>,
+    embedded_name: Option<Cow<'this, BStr>>,
+}
+
+struct SortedDirectory<'this, 'bytes> {
+    key: &'this Key,
+    this: &'this Directory<'bytes>,
+    files: Vec<SortedFile<'this, 'bytes>>,
+}
+
 derive::key!(Key);
 
 impl Key {
@@ -257,7 +269,57 @@ impl<'bytes> Archive<'bytes> {
         let mut sink = Sink::new(stream);
         let header = self.make_header(*options)?;
         Self::write_header(&mut sink, &header)?;
-        self.write_directories_in_order(&mut sink, &header, *options)?;
+
+        let offsets = header.compute_offsets();
+        let directories = self.sort_for_write(*options);
+
+        // let mut file_entries_offset = offsets.file_entries + header.file_names_len;
+        let mut file_entries_offset = u32::try_from(offsets.file_entries)?
+            .checked_add(header.file_names_len)
+            .ok_or(Error::IntegralOverflow)?;
+        for directory in &directories {
+            Self::write_directory_entry(
+                &mut sink,
+                *options,
+                directory.key,
+                directory.this,
+                &mut file_entries_offset,
+            )?;
+        }
+
+        let mut file_data_offset = u32::try_from(offsets.file_data)?;
+        for directory in &directories {
+            sink.write_protocol::<BZString>(directory.key.name.as_ref(), Endian::Little)?;
+            for file in &directory.files {
+                Self::write_file_entry(
+                    &mut sink,
+                    *options,
+                    file.key,
+                    file.this,
+                    &mut file_data_offset,
+                    file.embedded_name.as_ref().map(AsRef::as_ref),
+                )?;
+            }
+        }
+
+        if options.flags.file_strings() {
+            for directory in &directories {
+                for file in &directory.files {
+                    sink.write_protocol::<ZString>(file.key.name.as_ref(), Endian::Little)?;
+                }
+            }
+        }
+
+        for directory in &directories {
+            for file in &directory.files {
+                Self::write_file_data(
+                    &mut sink,
+                    file.this,
+                    file.embedded_name.as_ref().map(AsRef::as_ref),
+                )?;
+            }
+        }
+
         Ok(())
     }
 
@@ -298,18 +360,6 @@ impl<'bytes> Archive<'bytes> {
         })
     }
 
-    fn sort_files_for_write<'dir>(
-        options: Options,
-        directory: &'dir Directory<'bytes>,
-        files: &mut Vec<(&'dir DirectoryKey, &'dir File<'bytes>)>,
-    ) {
-        files.clear();
-        files.extend(directory.iter());
-        if options.flags.xbox_archive() {
-            files.sort_by_key(|&(key, _)| key.hash.numeric().swap_bytes());
-        }
-    }
-
     fn concat_directory_and_file_name<'string>(
         directory: &'string Key,
         file: &'string DirectoryKey,
@@ -342,88 +392,43 @@ impl<'bytes> Archive<'bytes> {
         }
     }
 
-    fn write_directories_in_order<Out>(
-        &self,
-        sink: &mut Sink<Out>,
-        header: &Header,
-        options: Options,
-    ) -> Result<()>
-    where
-        Out: Write,
-    {
-        let offsets = header.compute_offsets();
-        // let mut file_entries_offset = offsets.file_entries + header.file_names_len;
-        let mut file_entries_offset = u32::try_from(offsets.file_entries)?
-            .checked_add(header.file_names_len)
-            .ok_or(Error::IntegralOverflow)?;
-        let mut file_data_offset = u32::try_from(offsets.file_data)?;
-
-        macro_rules! visit {
-            ($iter:ident) => {
-                for (directory_key, directory) in $iter.iter() {
-                    Self::write_directory_entry(
-                        sink,
-                        options,
-                        directory_key,
-                        directory,
-                        &mut file_entries_offset,
-                    )?;
-                }
-
-                let mut sorted_files = Vec::new();
-                for (directory_key, directory) in $iter.iter() {
-                    Self::sort_files_for_write(options, &directory, &mut sorted_files);
-
-                    let embedded_file_names = match options.version {
-                        Version::FO3 | Version::SSE if options.flags.embedded_file_names() => {
-                            sorted_files
-                                .iter()
-                                .map(|(file_key, _)| {
-                                    Self::concat_directory_and_file_name(directory_key, file_key)
-                                })
-                                .collect::<Vec<_>>()
+    fn sort_for_write<'this>(&'this self, options: Options) -> Vec<SortedDirectory<'this, 'bytes>> {
+        let mut directories: Vec<_> = self
+            .iter()
+            .map(|(directory_key, directory)| {
+                let mut files: Vec<_> = directory
+                    .iter()
+                    .map(|(file_key, file)| {
+                        let embedded_name = match options.version {
+                            Version::FO3 | Version::SSE if options.flags.embedded_file_names() => {
+                                Some(Self::concat_directory_and_file_name(
+                                    directory_key,
+                                    file_key,
+                                ))
+                            }
+                            _ => None,
+                        };
+                        SortedFile {
+                            key: file_key,
+                            this: file,
+                            embedded_name,
                         }
-                        _ => Vec::default(),
-                    };
-
-                    sink.write_protocol::<BZString>(directory_key.name.as_ref(), Endian::Little)?;
-                    for (i, (file_key, file)) in sorted_files.iter().enumerate() {
-                        Self::write_file_entry(
-                            sink,
-                            options,
-                            file_key,
-                            file,
-                            &mut file_data_offset,
-                            embedded_file_names.get(i).map(|x| x.as_ref()),
-                        )?;
-                    }
-
-                    if options.flags.file_strings() {
-                        for (file_key, _) in &sorted_files {
-                            sink.write_protocol::<ZString>(file_key.name.as_ref(), Endian::Little)?;
-                        }
-                    }
-
-                    for (i, (_, file)) in sorted_files.iter().enumerate() {
-                        Self::write_file_data(
-                            sink,
-                            file,
-                            embedded_file_names.get(i).map(|x| x.as_ref()),
-                        )?;
-                    }
+                    })
+                    .collect();
+                if options.flags.xbox_archive() {
+                    files.sort_by_key(|x| x.key.hash.numeric().swap_bytes());
                 }
-            };
-        }
-
+                SortedDirectory {
+                    key: directory_key,
+                    this: directory,
+                    files,
+                }
+            })
+            .collect();
         if options.flags.xbox_archive() {
-            let mut v: Vec<_> = self.iter().collect();
-            v.sort_by_key(|&(key, _)| key.hash.numeric().swap_bytes());
-            visit!(v);
-        } else {
-            visit!(self);
+            directories.sort_by_key(|x| x.key.hash.numeric().swap_bytes());
         }
-
-        Ok(())
+        directories
     }
 
     fn write_directory_entry<Out>(
@@ -786,6 +791,7 @@ mod tests {
         tes4::{Archive, ArchiveKey, DirectoryKey, Error, File, FileCompressionOptions},
     };
     use anyhow::Context as _;
+    use memmap2::Mmap;
     use std::{fs, io, path::Path};
 
     #[test]
@@ -856,7 +862,7 @@ mod tests {
     }
 
     #[test]
-    fn xbox_decompressed() -> anyhow::Result<()> {
+    fn xbox_decompressed_read() -> anyhow::Result<()> {
         let root = Path::new("data/tes4_xbox_read_test");
 
         let (normal, normal_options) = Archive::read(root.join("normal.bsa").as_path())
@@ -886,6 +892,35 @@ mod tests {
                 assert_eq!(file_normal.1.as_bytes(), file_xbox.1.as_bytes());
             }
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn xbox_decompressed_write() -> anyhow::Result<()> {
+        let path = Path::new("data/tes4_xbox_write_test/in.bsa");
+
+        let original = {
+            let fd =
+                fs::File::open(path).with_context(|| format!("failed to open file: {path:?}"))?;
+            unsafe { Mmap::map(&fd) }
+                .with_context(|| format!("failed to memory map file: {path:?}"))?
+        };
+
+        let copy = {
+            let (archive, options) =
+                Archive::read(path).with_context(|| format!("failed to read archive: {path:?}"))?;
+            let mut v = Vec::new();
+            archive
+                .write(&mut v, &options)
+                .with_context(|| format!("failed to write archive: {path:?}"))?;
+            v
+        };
+
+        let original = &original[..];
+        let copy = &copy[..];
+        assert_eq!(original.len(), copy.len());
+        assert_eq!(original, copy);
 
         Ok(())
     }
