@@ -11,9 +11,9 @@ enum MalformedStringError {
     StringTooLarge,
 }
 
-impl MalformedStringError {
-    fn marshal(self) -> io::Error {
-        io::Error::new(io::ErrorKind::InvalidData, self)
+impl From<MalformedStringError> for io::Error {
+    fn from(value: MalformedStringError) -> Self {
+        Self::new(io::ErrorKind::InvalidData, value)
     }
 }
 
@@ -49,7 +49,7 @@ impl BinaryWriteable for BString {
                 stream.write_all(item)?;
                 Ok(())
             }
-            Err(_) => Err(MalformedStringError::StringTooLarge.marshal()),
+            Err(_) => Err(MalformedStringError::StringTooLarge.into()),
         }
     }
 }
@@ -109,7 +109,7 @@ impl BinaryReadable for BZString {
                     result.shrink_to_fit();
                     Ok(result.into())
                 }
-                _ => Err(MalformedStringError::MissingNullTerminator.marshal()),
+                _ => Err(MalformedStringError::MissingNullTerminator.into()),
             }
         } else {
             Ok(Self::Item::default())
@@ -132,7 +132,7 @@ impl BinaryWriteable for BZString {
                 stream.write_all(b"\0")?;
                 Ok(())
             }
-            Err(_) => Err(MalformedStringError::StringTooLarge.marshal()),
+            Err(_) => Err(MalformedStringError::StringTooLarge.into()),
         }
     }
 }
