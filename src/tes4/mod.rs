@@ -32,7 +32,7 @@ pub enum Error {
     #[error("buffer failed to decompress to the expected size... expected {expected} bytes, but got {actual} bytes")]
     DecompressionSizeMismatch { expected: usize, actual: usize },
 
-    #[error("an operation two integers would have overflowed and corrupted data")]
+    #[error("an operation on two integers would have overflowed and corrupted data")]
     IntegralOverflow,
 
     #[error("an operation on an integer would have truncated and corrupted data")]
