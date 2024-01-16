@@ -29,19 +29,19 @@ impl Mapping {
     }
 }
 
-enum ByteContainerInner<'bytes> {
+enum BytesInner<'bytes> {
     Owned(Vec<u8>),
     Borrowed(&'bytes [u8]),
     Mapped(Mapping),
 }
 
-use ByteContainerInner::*;
+use BytesInner::*;
 
-pub(crate) struct ByteContainer<'bytes> {
-    inner: ByteContainerInner<'bytes>,
+pub(crate) struct Bytes<'bytes> {
+    inner: BytesInner<'bytes>,
 }
 
-impl<'bytes> ByteContainer<'bytes> {
+impl<'bytes> Bytes<'bytes> {
     #[must_use]
     pub(crate) fn as_bytes(&self) -> &[u8] {
         match &self.inner {
@@ -86,8 +86,8 @@ impl<'bytes> ByteContainer<'bytes> {
     }
 
     #[must_use]
-    pub(crate) fn into_owned(self) -> ByteContainer<'static> {
-        ByteContainer {
+    pub(crate) fn into_owned(self) -> Bytes<'static> {
+        Bytes {
             inner: match self.inner {
                 Owned(x) => Owned(x),
                 Borrowed(x) => Owned(x.to_owned()),
@@ -100,8 +100,8 @@ impl<'bytes> ByteContainer<'bytes> {
     pub(crate) fn into_compressable(
         self,
         decompressed_len: Option<usize>,
-    ) -> CompressableByteContainer<'bytes> {
-        CompressableByteContainer {
+    ) -> CompressableBytes<'bytes> {
+        CompressableBytes {
             inner: match (self.inner, decompressed_len) {
                 (Owned(x), Some(len)) => OwnedCompressed(x, len),
                 (Owned(x), None) => OwnedDecompressed(x),
@@ -114,7 +114,7 @@ impl<'bytes> ByteContainer<'bytes> {
     }
 }
 
-impl ByteContainer<'static> {
+impl Bytes<'static> {
     #[must_use]
     pub(crate) fn from_owned(bytes: Vec<u8>) -> Self {
         Self {
@@ -130,7 +130,7 @@ impl ByteContainer<'static> {
     }
 }
 
-impl<'bytes> Default for ByteContainer<'bytes> {
+impl<'bytes> Default for Bytes<'bytes> {
     fn default() -> Self {
         Self {
             inner: Owned(Vec::new()),
@@ -138,7 +138,7 @@ impl<'bytes> Default for ByteContainer<'bytes> {
     }
 }
 
-enum CompressableByteContainerInner<'bytes> {
+enum CompressableBytesInner<'bytes> {
     OwnedDecompressed(Vec<u8>),
     OwnedCompressed(Vec<u8>, usize),
     BorrowedDecompressed(&'bytes [u8]),
@@ -147,13 +147,13 @@ enum CompressableByteContainerInner<'bytes> {
     MappedCompressed(Mapping, usize),
 }
 
-use CompressableByteContainerInner::*;
+use CompressableBytesInner::*;
 
-pub(crate) struct CompressableByteContainer<'bytes> {
-    inner: CompressableByteContainerInner<'bytes>,
+pub(crate) struct CompressableBytes<'bytes> {
+    inner: CompressableBytesInner<'bytes>,
 }
 
-impl<'bytes> CompressableByteContainer<'bytes> {
+impl<'bytes> CompressableBytes<'bytes> {
     #[must_use]
     pub(crate) fn as_bytes(&self) -> &[u8] {
         match &self.inner {
@@ -201,8 +201,8 @@ impl<'bytes> CompressableByteContainer<'bytes> {
     }
 
     #[must_use]
-    pub(crate) fn into_owned(self) -> CompressableByteContainer<'static> {
-        CompressableByteContainer {
+    pub(crate) fn into_owned(self) -> CompressableBytes<'static> {
+        CompressableBytes {
             inner: match self.inner {
                 OwnedDecompressed(x) => OwnedDecompressed(x),
                 OwnedCompressed(x, y) => OwnedCompressed(x, y),
@@ -231,7 +231,7 @@ impl<'bytes> CompressableByteContainer<'bytes> {
     }
 }
 
-impl CompressableByteContainer<'static> {
+impl CompressableBytes<'static> {
     #[must_use]
     pub(crate) fn from_owned(bytes: Vec<u8>, decompressed_len: Option<usize>) -> Self {
         Self {
@@ -243,7 +243,7 @@ impl CompressableByteContainer<'static> {
     }
 }
 
-impl<'bytes> Default for CompressableByteContainer<'bytes> {
+impl<'bytes> Default for CompressableBytes<'bytes> {
     fn default() -> Self {
         Self {
             inner: OwnedDecompressed(Vec::new()),

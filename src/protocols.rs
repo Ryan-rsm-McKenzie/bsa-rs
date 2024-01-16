@@ -29,7 +29,7 @@ impl BinaryReadable for BString {
         let len: u8 = stream.read(Endian::Native)?;
         let mut result = Vec::new();
         result.resize_with(usize::from(len), Default::default);
-        stream.read_bytes(&mut result[..])?;
+        stream.read_into(&mut result[..])?;
         result.shrink_to_fit();
         Ok(result.into())
     }
@@ -103,7 +103,7 @@ impl BinaryReadable for BZString {
         if len > 0 {
             let mut result = Vec::new();
             result.resize_with(usize::from(len), Default::default);
-            stream.read_bytes(&mut result[..])?;
+            stream.read_into(&mut result[..])?;
             match result.pop() {
                 Some(b'\0') => {
                     result.shrink_to_fit();

@@ -1,5 +1,5 @@
 use crate::{
-    containers::CompressableByteContainer,
+    containers::CompressableBytes,
     derive,
     io::Source,
     tes4::{CompressionCodec, Error, Result, Version},
@@ -21,7 +21,7 @@ pub struct CompressionOptions {
 
 #[derive(Default)]
 pub struct File<'bytes> {
-    pub(crate) container: CompressableByteContainer<'bytes>,
+    pub(crate) container: CompressableBytes<'bytes>,
 }
 
 type ReadResult<T> = T;
@@ -33,7 +33,7 @@ impl<'bytes> File<'bytes> {
         self.compress_into(&mut bytes, options)?;
         bytes.shrink_to_fit();
         Ok(File {
-            container: CompressableByteContainer::from_owned(bytes, Some(self.len())),
+            container: CompressableBytes::from_owned(bytes, Some(self.len())),
         })
     }
 
@@ -56,7 +56,7 @@ impl<'bytes> File<'bytes> {
         self.decompress_into(&mut bytes, options)?;
         bytes.shrink_to_fit();
         Ok(File {
-            container: CompressableByteContainer::from_owned(bytes, None),
+            container: CompressableBytes::from_owned(bytes, None),
         })
     }
 
@@ -120,7 +120,7 @@ impl<'bytes> File<'bytes> {
         In: ?Sized + Source<'bytes>,
     {
         Ok(Self {
-            container: stream.read_to_end().into_compressable(None),
+            container: stream.read_bytes_to_end().into_compressable(None),
         })
     }
 
@@ -155,13 +155,13 @@ impl<'bytes> File<'bytes> {
 impl<'bytes> CompressableFrom<&'bytes [u8]> for File<'bytes> {
     fn from_compressed(value: &'bytes [u8], decompressed_len: usize) -> Self {
         Self {
-            container: CompressableByteContainer::from_borrowed(value, Some(decompressed_len)),
+            container: CompressableBytes::from_borrowed(value, Some(decompressed_len)),
         }
     }
 
     fn from_decompressed(value: &'bytes [u8]) -> Self {
         Self {
-            container: CompressableByteContainer::from_borrowed(value, None),
+            container: CompressableBytes::from_borrowed(value, None),
         }
     }
 }
@@ -169,13 +169,13 @@ impl<'bytes> CompressableFrom<&'bytes [u8]> for File<'bytes> {
 impl CompressableFrom<Vec<u8>> for File<'static> {
     fn from_compressed(value: Vec<u8>, decompressed_len: usize) -> Self {
         Self {
-            container: CompressableByteContainer::from_owned(value, Some(decompressed_len)),
+            container: CompressableBytes::from_owned(value, Some(decompressed_len)),
         }
     }
 
     fn from_decompressed(value: Vec<u8>) -> Self {
         Self {
-            container: CompressableByteContainer::from_owned(value, None),
+            container: CompressableBytes::from_owned(value, None),
         }
     }
 }

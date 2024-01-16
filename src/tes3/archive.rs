@@ -1,5 +1,5 @@
 use crate::{
-    containers::ByteContainer,
+    containers::Bytes,
     derive,
     io::{Endian, Sink, Source},
     protocols::ZString,
@@ -107,12 +107,11 @@ impl<'bytes> Archive<'bytes> {
         })??;
 
         let (size, offset): (u32, u32) = source.read(Endian::Little)?;
-        let container =
-            source.save_restore_position(|source| -> Result<ByteContainer<'bytes>> {
-                source.seek_absolute(offsets.file_data + offset as usize)?;
-                let result = source.read_container(size as usize)?;
-                Ok(result)
-            })??;
+        let container = source.save_restore_position(|source| -> Result<Bytes<'bytes>> {
+            source.seek_absolute(offsets.file_data + offset as usize)?;
+            let result = source.read_bytes(size as usize)?;
+            Ok(result)
+        })??;
 
         Ok((Key { hash, name }, File { container }))
     }

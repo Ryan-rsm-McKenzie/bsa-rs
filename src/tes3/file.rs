@@ -1,5 +1,5 @@
 use crate::{
-    containers::ByteContainer,
+    containers::Bytes,
     derive,
     io::Source,
     tes3::{Error, Result},
@@ -8,7 +8,7 @@ use std::io::Write;
 
 #[derive(Default)]
 pub struct File<'bytes> {
-    pub(crate) container: ByteContainer<'bytes>,
+    pub(crate) container: Bytes<'bytes>,
 }
 
 type ReadResult<T> = T;
@@ -29,7 +29,7 @@ impl<'bytes> File<'bytes> {
         In: ?Sized + Source<'bytes>,
     {
         Ok(Self {
-            container: stream.read_to_end(),
+            container: stream.read_bytes_to_end(),
         })
     }
 }
@@ -37,7 +37,7 @@ impl<'bytes> File<'bytes> {
 impl<'bytes> From<&'bytes [u8]> for File<'bytes> {
     fn from(value: &'bytes [u8]) -> Self {
         Self {
-            container: ByteContainer::from_borrowed(value),
+            container: Bytes::from_borrowed(value),
         }
     }
 }
@@ -45,7 +45,7 @@ impl<'bytes> From<&'bytes [u8]> for File<'bytes> {
 impl From<Vec<u8>> for File<'static> {
     fn from(value: Vec<u8>) -> Self {
         Self {
-            container: ByteContainer::from_owned(value),
+            container: Bytes::from_owned(value),
         }
     }
 }

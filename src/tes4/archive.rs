@@ -1,5 +1,5 @@
 use crate::{
-    containers::CompressableByteContainer,
+    containers::CompressableBytes,
     derive,
     io::{Endian, Sink, Source},
     protocols::{self, BZString, ZString},
@@ -669,8 +669,8 @@ impl<'bytes> Archive<'bytes> {
             None
         };
 
-        let container = source.save_restore_position(
-            |source| -> Result<CompressableByteContainer<'bytes>> {
+        let container =
+            source.save_restore_position(|source| -> Result<CompressableBytes<'bytes>> {
                 source.seek_absolute(data_offset)?;
 
                 match header.version {
@@ -701,11 +701,10 @@ impl<'bytes> Archive<'bytes> {
                     };
 
                 let container = source
-                    .read_container(data_size)?
+                    .read_bytes(data_size)?
                     .into_compressable(decompressed_len);
                 Ok(container)
-            },
-        )??;
+            })??;
 
         Ok((
             DirectoryKey {

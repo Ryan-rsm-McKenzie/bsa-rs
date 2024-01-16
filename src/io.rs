@@ -1,4 +1,4 @@
-use crate::containers::ByteContainer;
+use crate::containers::Bytes;
 use core::{mem, ops::Range};
 use memmap2::{Mmap, MmapOptions};
 use std::{
@@ -15,12 +15,12 @@ pub(crate) enum Endian {
 }
 
 pub(crate) trait Source<'bytes> {
-    fn read_bytes(&mut self, buf: &mut [u8]) -> io::Result<()>;
-
-    fn read_container(&mut self, len: usize) -> io::Result<ByteContainer<'bytes>>;
+    fn read_bytes(&mut self, len: usize) -> io::Result<Bytes<'bytes>>;
 
     #[must_use]
-    fn read_to_end(&mut self) -> ByteContainer<'bytes>;
+    fn read_bytes_to_end(&mut self) -> Bytes<'bytes>;
+
+    fn read_into(&mut self, buf: &mut [u8]) -> io::Result<()>;
 
     fn seek_absolute(&mut self, pos: usize) -> io::Result<()>;
 
@@ -63,7 +63,7 @@ pub(crate) trait Source<'bytes> {
 macro_rules! make_sourceable {
     ($this:ty, $bytes_lifetime:lifetime $(,$this_lifetime:lifetime)?) => {
         impl $(<$this_lifetime>)? Source<$bytes_lifetime> for $this {
-            fn read_bytes(&mut self, buf: &mut [u8]) -> io::Result<()> {
+            fn read_into(&mut self, buf: &mut [u8]) -> io::Result<()> {
                 let len = buf.len();
                 let start = self.pos;
                 let stop = start + len;
@@ -76,7 +76,7 @@ macro_rules! make_sourceable {
                 }
             }
 
-            fn read_container(&mut self, len: usize) -> io::Result<ByteContainer<$bytes_lifetime>> {
+            fn read_bytes(&mut self, len: usize) -> io::Result<Bytes<$bytes_lifetime>> {
                 let start = self.pos;
                 let stop = start + len;
                 if stop > self.source.len() {
@@ -87,7 +87,7 @@ macro_rules! make_sourceable {
                 }
             }
 
-			fn read_to_end(&mut self) -> ByteContainer<$bytes_lifetime> {
+			fn read_bytes_to_end(&mut self) -> Bytes<$bytes_lifetime> {
 				let len = self.source.len();
 				let start = self.pos;
 				let stop = len - start;
@@ -117,8 +117,8 @@ pub(crate) struct BorrowedSource<'bytes> {
 
 impl<'bytes> BorrowedSource<'bytes> {
     #[must_use]
-    fn make_container(&self, range: Range<usize>) -> ByteContainer<'bytes> {
-        ByteContainer::from_borrowed(&self.source[range])
+    fn make_container(&self, range: Range<usize>) -> Bytes<'bytes> {
+        Bytes::from_borrowed(&self.source[range])
     }
 }
 
@@ -137,8 +137,8 @@ pub(crate) struct CopiedSource<'bytes> {
 
 impl<'bytes> CopiedSource<'bytes> {
     #[must_use]
-    fn make_container(&self, range: Range<usize>) -> ByteContainer<'static> {
-        ByteContainer::from_owned(self.source[range].to_vec())
+    fn make_container(&self, range: Range<usize>) -> Bytes<'static> {
+        Bytes::from_owned(self.source[range].to_vec())
     }
 }
 
@@ -157,8 +157,8 @@ pub(crate) struct MappedSource {
 
 impl MappedSource {
     #[must_use]
-    fn make_container(&self, range: Range<usize>) -> ByteContainer<'static> {
-        ByteContainer::from_mapped(range.start, range.len(), self.source.clone())
+    fn make_container(&self, range: Range<usize>) -> Bytes<'static> {
+        Bytes::from_mapped(range.start, range.len(), self.source.clone())
     }
 }
 
@@ -253,7 +253,7 @@ macro_rules! make_binary_streamable {
                 In: ?Sized + Source<'bytes>,
             {
                 let mut bytes = [0u8; mem::size_of::<Self::Item>()];
-                stream.read_bytes(&mut bytes)?;
+                stream.read_into(&mut bytes)?;
                 Ok(Self::from_be_bytes(bytes))
             }
 
@@ -262,7 +262,7 @@ macro_rules! make_binary_streamable {
                 In: ?Sized + Source<'bytes>,
             {
                 let mut bytes = [0u8; mem::size_of::<Self::Item>()];
-                stream.read_bytes(&mut bytes)?;
+                stream.read_into(&mut bytes)?;
                 Ok(Self::from_le_bytes(bytes))
             }
 
@@ -271,7 +271,7 @@ macro_rules! make_binary_streamable {
                 In: ?Sized + Source<'bytes>,
             {
                 let mut bytes = [0u8; mem::size_of::<Self::Item>()];
-                stream.read_bytes(&mut bytes)?;
+                stream.read_into(&mut bytes)?;
                 Ok(Self::from_ne_bytes(bytes))
             }
         }
