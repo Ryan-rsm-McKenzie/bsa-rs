@@ -1244,4 +1244,32 @@ mod tests {
             Ok(_) => anyhow::bail!("read should have failed"),
         }
     }
+
+    #[test]
+    fn data_sharing_name() -> anyhow::Result<()> {
+        let path = Path::new("data/tes4_data_sharing_name_test/share.bsa");
+        let (archive, options) = Archive::read(path).context("failed to read archive")?;
+        assert_eq!(options.version, Version::TES5);
+        assert!(options.flags.embedded_file_names());
+
+        let find = |directory_name: &str, file_name: &str| -> anyhow::Result<()> {
+            let directory = archive
+                .get_key_value(&ArchiveKey::from(directory_name))
+                .with_context(|| format!("failed to get directory: {directory_name}"))?;
+            assert_eq!(directory.0.name, directory_name);
+
+            let file = directory
+                .1
+                .get_key_value(&DirectoryKey::from(file_name))
+                .with_context(|| format!("failed to get file: {file_name}"))?;
+            assert_eq!(file.0.name, file_name);
+
+            Ok(())
+        };
+
+        find("misc1", "example1.txt")?;
+        find("misc2", "example2.txt")?;
+
+        Ok(())
+    }
 }
