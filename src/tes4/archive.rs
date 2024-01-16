@@ -4,8 +4,8 @@ use crate::{
     io::{Endian, Sink, Source},
     protocols::{self, BZString, ZString},
     tes4::{
-        self, directory::Map as DirectoryMap, Directory, DirectoryKey, Error, File, Hash, Result,
-        Version,
+        self, directory::Map as DirectoryMap, Directory, DirectoryHash, DirectoryKey, Error, File,
+        Hash, Result, Version,
     },
 };
 use bstr::{BStr, BString, ByteSlice as _};
@@ -241,11 +241,11 @@ struct SortedDirectory<'this, 'bytes> {
     files: Vec<SortedFile<'this, 'bytes>>,
 }
 
-derive::key!(Key);
+derive::key!(Key: DirectoryHash);
 
 impl Key {
     #[must_use]
-    fn hash_in_place(name: &mut BString) -> Hash {
+    fn hash_in_place(name: &mut BString) -> DirectoryHash {
         tes4::hash_directory_in_place(name)
     }
 }
@@ -317,7 +317,7 @@ impl Options {
 }
 
 type ReadResult<T> = (T, Options);
-derive::archive!(Archive => ReadResult, Map: Key => Directory);
+derive::archive!(Archive => ReadResult, Map: (Key: DirectoryHash) => Directory);
 
 impl<'bytes> Archive<'bytes> {
     pub fn write<Out>(&self, stream: &mut Out, options: &Options) -> Result<()>
@@ -501,7 +501,7 @@ impl<'bytes> Archive<'bytes> {
     where
         Out: Write,
     {
-        Self::write_hash(sink, options, key.hash)?;
+        Self::write_hash(sink, options, key.hash.into())?;
 
         let file_count: u32 = directory.len().try_into()?;
         sink.write(&file_count, Endian::Little)?;
@@ -570,7 +570,7 @@ impl<'bytes> Archive<'bytes> {
     where
         Out: Write,
     {
-        Self::write_hash(sink, options, key.hash)?;
+        Self::write_hash(sink, options, key.hash.into())?;
 
         let (size_with_info, size) = {
             let mut size = file.len();
@@ -701,7 +701,13 @@ impl<'bytes> Archive<'bytes> {
                 Ok((name.unwrap_or_default(), Directory { map }))
             })??;
 
-        Ok((Key { hash, name }, directory))
+        Ok((
+            Key {
+                hash: hash.into(),
+                name,
+            },
+            directory,
+        ))
     }
 
     fn read_file_entry<In>(
@@ -774,7 +780,7 @@ impl<'bytes> Archive<'bytes> {
 
         Ok((
             DirectoryKey {
-                hash,
+                hash: hash.into(),
                 name: name.unwrap_or_default(),
             },
             File { container },
@@ -1111,10 +1117,8 @@ mod tests {
             .zip(&mappings)
             .map(|(info, mapping)| {
                 let file = File::from_decompressed(&mapping[..]);
-                let directory: Directory = [(DirectoryKey::from(info.file.name), file)]
-                    .into_iter()
-                    .collect();
-                (ArchiveKey::from(info.directory.name), directory)
+                let directory: Directory = [(info.file.name.into(), file)].into_iter().collect();
+                (info.directory.name.into(), directory)
             })
             .collect();
 

@@ -10,7 +10,10 @@ pub use self::{
     },
     directory::{Directory, Key as DirectoryKey},
     file::{File, Options as FileOptions},
-    hashing::{hash_directory, hash_directory_in_place, hash_file, hash_file_in_place, Hash},
+    hashing::{
+        hash_directory, hash_directory_in_place, hash_file, hash_file_in_place, DirectoryHash,
+        FileHash, Hash,
+    },
 };
 
 use core::num::TryFromIntError;

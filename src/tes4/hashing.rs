@@ -1,4 +1,4 @@
-use crate::{cc, hashing};
+use crate::{cc, derive, hashing};
 use bstr::{BStr, BString, ByteSlice as _};
 use core::cmp::Ordering;
 
@@ -11,6 +11,9 @@ pub struct Hash {
     pub first: u8,
     pub crc: u32,
 }
+
+derive::hash!(DirectoryHash);
+derive::hash!(FileHash);
 
 impl Hash {
     #[must_use]
@@ -58,13 +61,13 @@ fn crc32(bytes: &[u8]) -> u32 {
 }
 
 #[must_use]
-pub fn hash_directory(path: &BStr) -> (Hash, BString) {
+pub fn hash_directory(path: &BStr) -> (DirectoryHash, BString) {
     let mut path = path.to_owned();
     (hash_directory_in_place(&mut path), path)
 }
 
 #[must_use]
-pub fn hash_directory_in_place(path: &mut BString) -> Hash {
+pub fn hash_directory_in_place(path: &mut BString) -> DirectoryHash {
     hashing::normalize_path(path);
     let mut h = Hash::new();
     let len = path.len();
@@ -87,17 +90,17 @@ pub fn hash_directory_in_place(path: &mut BString) -> Hash {
         h.crc = crc32(&path[1..len - 2]);
     }
 
-    h
+    h.into()
 }
 
 #[must_use]
-pub fn hash_file(path: &BStr) -> (Hash, BString) {
+pub fn hash_file(path: &BStr) -> (FileHash, BString) {
     let mut path = path.to_owned();
     (hash_file_in_place(&mut path), path)
 }
 
 #[must_use]
-pub fn hash_file_in_place(path: &mut BString) -> Hash {
+pub fn hash_file_in_place(path: &mut BString) -> FileHash {
     const LUT: [u32; 6] = [
         cc::make_four(b""),
         cc::make_four(b".nif"),
@@ -120,7 +123,7 @@ pub fn hash_file_in_place(path: &mut BString) -> Hash {
     };
 
     if !stem.is_empty() && stem.len() < 260 && extension.len() < 16 {
-        let mut h = hash_directory(stem.as_bstr()).0;
+        let mut h: Hash = hash_directory(stem.as_bstr()).0.into();
         h.crc = u32::wrapping_add(h.crc, crc32(extension));
 
         let cc = cc::make_four(extension);
@@ -133,9 +136,9 @@ pub fn hash_file_in_place(path: &mut BString) -> Hash {
             h.last2 = u32::from(h.last2).wrapping_add(u32::from(i.wrapping_shl(7))) as u8;
         }
 
-        h
+        h.into()
     } else {
-        Hash::default()
+        FileHash::default()
     }
 }
 

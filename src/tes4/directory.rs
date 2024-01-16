@@ -1,19 +1,19 @@
 use crate::{
     derive,
-    tes4::{self, File, Hash},
+    tes4::{self, File, FileHash},
 };
 use bstr::BString;
 
-derive::key!(Key);
+derive::key!(Key: FileHash);
 
 impl Key {
     #[must_use]
-    fn hash_in_place(name: &mut BString) -> Hash {
+    fn hash_in_place(name: &mut BString) -> FileHash {
         tes4::hash_file_in_place(name)
     }
 }
 
-derive::mapping!(Directory, Map: Key => File);
+derive::mapping!(Directory, Map: (Key: FileHash) => File);
 
 #[cfg(test)]
 mod tests {

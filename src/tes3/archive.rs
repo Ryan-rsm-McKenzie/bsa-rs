@@ -3,7 +3,7 @@ use crate::{
     derive,
     io::{Endian, Sink, Source},
     protocols::ZString,
-    tes3::{hashing, Error, File, Hash, Result},
+    tes3::{hashing, Error, File, FileHash, Hash, Result},
 };
 use bstr::BString;
 use std::io::Write;
@@ -44,17 +44,17 @@ impl Header {
     }
 }
 
-derive::key!(Key);
+derive::key!(Key: FileHash);
 
 impl Key {
     #[must_use]
-    fn hash_in_place(name: &mut BString) -> Hash {
+    fn hash_in_place(name: &mut BString) -> FileHash {
         hashing::hash_file_in_place(name)
     }
 }
 
 type ReadResult<T> = (T,);
-derive::archive!(Archive => ReadResult, Map: Key => File);
+derive::archive!(Archive => ReadResult, Map: (Key: FileHash) => File);
 
 impl<'bytes> Archive<'bytes> {
     pub fn write<Out>(&self, stream: &mut Out) -> Result<()>
@@ -113,7 +113,13 @@ impl<'bytes> Archive<'bytes> {
             Ok(result)
         })??;
 
-        Ok((Key { hash, name }, File { container }))
+        Ok((
+            Key {
+                hash: hash.into(),
+                name,
+            },
+            File { container },
+        ))
     }
 
     fn read_hash<In>(source: &mut In) -> Result<Hash>
@@ -230,7 +236,7 @@ impl<'bytes> Archive<'bytes> {
 mod tests {
     use crate::{
         prelude::*,
-        tes3::{Archive, ArchiveKey, Error, File, Hash},
+        tes3::{Archive, ArchiveKey, Error, File, FileHash, Hash},
         Borrowed,
     };
     use anyhow::Context as _;
@@ -389,7 +395,7 @@ mod tests {
     fn assert_generic_interfaces_compile() -> anyhow::Result<()> {
         let mut bsa = Archive::default();
         let key = ArchiveKey::default();
-        let hash = Hash::default();
+        let hash = FileHash::default();
 
         _ = bsa.get(&key);
         _ = bsa.get(&hash);

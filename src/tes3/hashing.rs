@@ -1,4 +1,4 @@
-use crate::hashing;
+use crate::{derive, hashing};
 use bstr::{BStr, BString};
 use core::cmp::Ordering;
 
@@ -8,6 +8,8 @@ pub struct Hash {
     pub lo: u32,
     pub hi: u32,
 }
+
+derive::hash!(FileHash);
 
 impl Hash {
     #[must_use]
@@ -43,13 +45,13 @@ impl Ord for Hash {
 }
 
 #[must_use]
-pub fn hash_file(path: &BStr) -> (Hash, BString) {
+pub fn hash_file(path: &BStr) -> (FileHash, BString) {
     let mut path = path.to_owned();
     (hash_file_in_place(&mut path), path)
 }
 
 #[must_use]
-pub fn hash_file_in_place(path: &mut BString) -> Hash {
+pub fn hash_file_in_place(path: &mut BString) -> FileHash {
     hashing::normalize_path(path);
     let midpoint = path.len() / 2;
     let mut h = Hash::new();
@@ -68,7 +70,7 @@ pub fn hash_file_in_place(path: &mut BString) -> Hash {
         i += 1;
     }
 
-    h
+    h.into()
 }
 
 #[cfg(test)]

@@ -5,7 +5,7 @@ mod hashing;
 pub use self::{
     archive::{Archive, Key as ArchiveKey},
     file::File,
-    hashing::{hash_file, hash_file_in_place, Hash},
+    hashing::{hash_file, hash_file_in_place, FileHash, Hash},
 };
 
 use core::num::TryFromIntError;

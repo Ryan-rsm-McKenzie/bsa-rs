@@ -89,10 +89,10 @@ macro_rules! container {
 pub(crate) use container;
 
 macro_rules! key {
-    ($this:ident) => {
+    ($this:ident: $hash:ident) => {
         #[derive(::core::clone::Clone, ::core::fmt::Debug, ::core::default::Default)]
         pub struct $this {
-            pub hash: Hash,
+            pub hash: $hash,
             pub name: ::bstr::BString,
         }
 
@@ -116,8 +116,8 @@ macro_rules! key {
             }
         }
 
-        impl ::core::borrow::Borrow<Hash> for $this {
-            fn borrow(&self) -> &Hash {
+        impl ::core::borrow::Borrow<$hash> for $this {
+            fn borrow(&self) -> &$hash {
                 &self.hash
             }
         }
@@ -138,7 +138,7 @@ macro_rules! key {
 pub(crate) use key;
 
 macro_rules! mapping {
-    ($this:ident, $mapping:ident: $key:ty => $value:ident) => {
+    ($this:ident, $mapping:ident: ($key:ident: $hash:ident) => $value:ident) => {
         pub(crate) type $mapping<'bytes> = ::std::collections::BTreeMap<$key, $value<'bytes>>;
 
         impl<'bytes> crate::Sealed for $this<'bytes> {}
@@ -156,7 +156,7 @@ macro_rules! mapping {
             #[must_use]
             pub fn get<K>(&self, key: &K) -> ::core::option::Option<&$value<'bytes>>
             where
-                K: ::core::borrow::Borrow<Hash>,
+                K: ::core::borrow::Borrow<$hash>,
             {
                 self.map.get(key.borrow())
             }
@@ -167,7 +167,7 @@ macro_rules! mapping {
                 key: &K,
             ) -> ::core::option::Option<(&$key, &$value<'bytes>)>
             where
-                K: ::core::borrow::Borrow<Hash>,
+                K: ::core::borrow::Borrow<$hash>,
             {
                 self.map.get_key_value(key.borrow())
             }
@@ -175,7 +175,7 @@ macro_rules! mapping {
             #[must_use]
             pub fn get_mut<K>(&mut self, key: &K) -> ::core::option::Option<&mut $value<'bytes>>
             where
-                K: ::core::borrow::Borrow<Hash>,
+                K: ::core::borrow::Borrow<$hash>,
             {
                 self.map.get_mut(key.borrow())
             }
@@ -222,7 +222,7 @@ macro_rules! mapping {
 
             pub fn remove<K>(&mut self, key: &K) -> ::core::option::Option<$value<'bytes>>
             where
-                K: ::core::borrow::Borrow<Hash>,
+                K: ::core::borrow::Borrow<$hash>,
             {
                 self.map.remove(key.borrow())
             }
@@ -232,7 +232,7 @@ macro_rules! mapping {
                 key: &K,
             ) -> ::core::option::Option<($key, $value<'bytes>)>
             where
-                K: ::core::borrow::Borrow<Hash>,
+                K: ::core::borrow::Borrow<$hash>,
             {
                 self.map.remove_entry(key.borrow())
             }
@@ -291,10 +291,101 @@ macro_rules! mapping {
 pub(crate) use mapping;
 
 macro_rules! archive {
-	($this:ident => $result:ident, $mapping:ident: $key:ty => $value:ident) => {
-		crate::derive::mapping!($this, $mapping: $key => $value);
+	($this:ident => $result:ident, $mapping:ident: ($key:ident: $hash:ident) => $value:ident) => {
+		crate::derive::mapping!($this, $mapping: ($key: $hash) => $value);
 		crate::derive::reader!($this => $result);
 	};
 }
 
 pub(crate) use archive;
+
+macro_rules! hash {
+    ($this:ident) => {
+        #[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+        #[repr(transparent)]
+        pub struct $this(Hash);
+
+        impl $this {
+            #[must_use]
+            pub fn new() -> Self {
+                Self::default()
+            }
+        }
+
+        impl ::core::convert::AsMut<Hash> for $this {
+            fn as_mut(&mut self) -> &mut Hash {
+                &mut self.0
+            }
+        }
+
+        impl ::core::convert::AsRef<Hash> for $this {
+            fn as_ref(&self) -> &Hash {
+                &self.0
+            }
+        }
+
+        impl ::core::borrow::Borrow<Hash> for $this {
+            fn borrow(&self) -> &Hash {
+                &self.0
+            }
+        }
+
+        impl ::core::borrow::BorrowMut<Hash> for $this {
+            fn borrow_mut(&mut self) -> &mut Hash {
+                &mut self.0
+            }
+        }
+
+        impl ::core::ops::Deref for $this {
+            type Target = Hash;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl ::core::ops::DerefMut for $this {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+
+        impl ::core::convert::From<Hash> for $this {
+            fn from(value: Hash) -> Self {
+                Self(value)
+            }
+        }
+
+        impl ::core::convert::From<$this> for Hash {
+            fn from(value: $this) -> Self {
+                value.0
+            }
+        }
+
+        impl ::core::cmp::PartialEq<Hash> for $this {
+            fn eq(&self, other: &Hash) -> bool {
+                self.0.eq(other)
+            }
+        }
+
+        impl ::core::cmp::PartialEq<$this> for Hash {
+            fn eq(&self, other: &$this) -> bool {
+                self.eq(&other.0)
+            }
+        }
+
+        impl ::core::cmp::PartialOrd<Hash> for $this {
+            fn partial_cmp(&self, other: &Hash) -> ::core::option::Option<::core::cmp::Ordering> {
+                self.0.partial_cmp(other)
+            }
+        }
+
+        impl ::core::cmp::PartialOrd<$this> for Hash {
+            fn partial_cmp(&self, other: &$this) -> ::core::option::Option<::core::cmp::Ordering> {
+                self.partial_cmp(&other.0)
+            }
+        }
+    };
+}
+
+pub(crate) use hash;
