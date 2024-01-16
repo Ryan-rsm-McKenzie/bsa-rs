@@ -393,7 +393,7 @@ impl<'bytes> Archive<'bytes> {
                             file_key,
                             file,
                             &mut file_data_offset,
-                            embedded_file_names.get(i),
+                            embedded_file_names.get(i).map(|x| x.as_ref()),
                         )?;
                     }
 
@@ -404,7 +404,11 @@ impl<'bytes> Archive<'bytes> {
                     }
 
                     for (i, (_, file)) in sorted_files.iter().enumerate() {
-                        Self::write_file_data(sink, file, embedded_file_names.get(i))?;
+                        Self::write_file_data(
+                            sink,
+                            file,
+                            embedded_file_names.get(i).map(|x| x.as_ref()),
+                        )?;
                     }
                 }
             };
@@ -471,7 +475,7 @@ impl<'bytes> Archive<'bytes> {
     fn write_file_data<Out>(
         sink: &mut Sink<Out>,
         file: &File<'bytes>,
-        embedded_file_name: Option<&Cow<'_, BStr>>,
+        embedded_file_name: Option<&BStr>,
     ) -> Result<()>
     where
         Out: Write,
@@ -495,7 +499,7 @@ impl<'bytes> Archive<'bytes> {
         key: &DirectoryKey,
         file: &File<'bytes>,
         file_data_offset: &mut u32,
-        embedded_file_name: Option<&Cow<'_, BStr>>,
+        embedded_file_name: Option<&BStr>,
     ) -> Result<()>
     where
         Out: Write,
