@@ -4,7 +4,7 @@ use std::io::{self, Write};
 
 #[derive(Debug, thiserror::Error)]
 enum Error {
-    #[error("postfix null-terminator was missing from read string")]
+    #[error("postfix null terminator was missing from a string")]
     MissingNullTerminator,
 
     #[error("a string is too large to be written without data loss")]
