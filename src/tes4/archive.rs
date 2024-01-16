@@ -347,7 +347,9 @@ impl<'bytes> Archive<'bytes> {
 
         let mut file_data_offset = u32::try_from(offsets.file_data)?;
         for directory in &directories {
-            sink.write_protocol::<BZString>(directory.key.name.as_ref(), Endian::Little)?;
+            if options.flags.directory_strings() {
+                sink.write_protocol::<BZString>(directory.key.name.as_ref(), Endian::Little)?;
+            }
             for file in &directory.files {
                 Self::write_file_entry(
                     &mut sink,
@@ -1134,8 +1136,7 @@ mod tests {
             assert_eq!(options.flags(), flags);
             assert_eq!(main.len(), child.len());
 
-            let strings_present =
-                flags.file_strings() || (version != Version::TES4 && flags.embedded_file_names());
+            let embedded_file_names = version != Version::TES4 && flags.embedded_file_names();
 
             for (info, mapping) in infos.iter().zip(&mappings) {
                 let archive_key: ArchiveKey = info.directory.name.into();
@@ -1144,7 +1145,7 @@ mod tests {
                     .with_context(|| format!("failed to get directory: {}", info.directory.name))?;
                 assert_eq!(directory.0.hash.numeric(), info.directory.hash);
                 assert_eq!(directory.1.len(), 1);
-                if strings_present {
+                if flags.directory_strings() || embedded_file_names {
                     assert_eq!(directory.0.name, archive_key.name);
                 }
 
@@ -1154,7 +1155,7 @@ mod tests {
                     .get_key_value(&directory_key)
                     .with_context(|| format!("failed to get file: {}", info.file.name))?;
                 assert_eq!(file.0.hash.numeric(), info.file.hash);
-                if strings_present {
+                if flags.file_strings() || embedded_file_names {
                     assert_eq!(file.0.name, directory_key.name);
                 }
 
