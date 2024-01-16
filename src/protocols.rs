@@ -17,7 +17,7 @@ impl From<Error> for io::Error {
     }
 }
 
-pub struct BString;
+pub(crate) struct BString;
 
 impl BinaryReadable for BString {
     type Item = ByteString;
@@ -54,7 +54,7 @@ impl BinaryWriteable for BString {
     }
 }
 
-pub struct ZString;
+pub(crate) struct ZString;
 
 impl BinaryReadable for ZString {
     type Item = ByteString;
@@ -90,7 +90,7 @@ impl BinaryWriteable for ZString {
     }
 }
 
-pub struct BZString;
+pub(crate) struct BZString;
 
 impl BinaryReadable for BZString {
     type Item = ByteString;

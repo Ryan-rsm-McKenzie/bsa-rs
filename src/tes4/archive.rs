@@ -153,16 +153,16 @@ impl Types {
 mod constants {
     use crate::cc;
 
-    pub const BSA: u32 = cc::make_four(b"BSA");
+    pub(crate) const BSA: u32 = cc::make_four(b"BSA");
 
-    pub const HEADER_SIZE: u32 = 0x24;
-    pub const DIRECTORY_ENTRY_SIZE_X86: usize = 0x10;
-    pub const DIRECTORY_ENTRY_SIZE_X64: usize = 0x18;
-    pub const FILE_ENTRY_SIZE: usize = 0x10;
+    pub(crate) const HEADER_SIZE: u32 = 0x24;
+    pub(crate) const DIRECTORY_ENTRY_SIZE_X86: usize = 0x10;
+    pub(crate) const DIRECTORY_ENTRY_SIZE_X64: usize = 0x18;
+    pub(crate) const FILE_ENTRY_SIZE: usize = 0x10;
 
-    pub const FILE_FLAG_COMPRESSION: u32 = 1 << 30;
-    pub const FILE_FLAG_CHECKED: u32 = 1 << 31;
-    pub const FILE_FLAG_SECONDARY_ARCHIVE: u32 = 1 << 31;
+    pub(crate) const FILE_FLAG_COMPRESSION: u32 = 1 << 30;
+    pub(crate) const FILE_FLAG_CHECKED: u32 = 1 << 31;
+    pub(crate) const FILE_FLAG_SECONDARY_ARCHIVE: u32 = 1 << 31;
 }
 
 struct Offsets {

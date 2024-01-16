@@ -33,7 +33,7 @@ fn map_byte(b: u8) -> u8 {
     LUT[b as usize]
 }
 
-pub fn normalize_path(path: &mut BString) {
+pub(crate) fn normalize_path(path: &mut BString) {
     for b in path.iter_mut() {
         *b = map_byte(*b);
     }

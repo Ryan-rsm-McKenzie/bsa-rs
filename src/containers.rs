@@ -9,22 +9,22 @@ struct Mapping {
 
 impl Mapping {
     #[must_use]
-    pub fn as_bytes(&self) -> &[u8] {
+    pub(crate) fn as_bytes(&self) -> &[u8] {
         &self.mapping[self.pos..self.pos + self.len]
     }
 
     #[must_use]
-    pub fn as_ptr(&self) -> *const u8 {
+    pub(crate) fn as_ptr(&self) -> *const u8 {
         self.as_bytes().as_ptr()
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.len == 0
     }
 
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.len
     }
 }
@@ -37,13 +37,13 @@ enum ByteContainerInner<'bytes> {
 
 use ByteContainerInner::*;
 
-pub struct ByteContainer<'bytes> {
+pub(crate) struct ByteContainer<'bytes> {
     inner: ByteContainerInner<'bytes>,
 }
 
 impl<'bytes> ByteContainer<'bytes> {
     #[must_use]
-    pub fn as_bytes(&self) -> &[u8] {
+    pub(crate) fn as_bytes(&self) -> &[u8] {
         match &self.inner {
             Owned(x) => x,
             Borrowed(x) => x,
@@ -52,7 +52,7 @@ impl<'bytes> ByteContainer<'bytes> {
     }
 
     #[must_use]
-    pub fn as_ptr(&self) -> *const u8 {
+    pub(crate) fn as_ptr(&self) -> *const u8 {
         match &self.inner {
             Owned(x) => x.as_ptr(),
             Borrowed(x) => x.as_ptr(),
@@ -61,14 +61,14 @@ impl<'bytes> ByteContainer<'bytes> {
     }
 
     #[must_use]
-    pub fn from_borrowed(bytes: &'bytes [u8]) -> Self {
+    pub(crate) fn from_borrowed(bytes: &'bytes [u8]) -> Self {
         Self {
             inner: Borrowed(bytes),
         }
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         match &self.inner {
             Owned(x) => x.is_empty(),
             Borrowed(x) => x.is_empty(),
@@ -77,7 +77,7 @@ impl<'bytes> ByteContainer<'bytes> {
     }
 
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         match &self.inner {
             Owned(x) => x.len(),
             Borrowed(x) => x.len(),
@@ -86,7 +86,7 @@ impl<'bytes> ByteContainer<'bytes> {
     }
 
     #[must_use]
-    pub fn into_owned(self) -> ByteContainer<'static> {
+    pub(crate) fn into_owned(self) -> ByteContainer<'static> {
         ByteContainer {
             inner: match self.inner {
                 Owned(x) => Owned(x),
@@ -97,7 +97,7 @@ impl<'bytes> ByteContainer<'bytes> {
     }
 
     #[must_use]
-    pub fn into_compressable(
+    pub(crate) fn into_compressable(
         self,
         decompressed_len: Option<usize>,
     ) -> CompressableByteContainer<'bytes> {
@@ -116,14 +116,14 @@ impl<'bytes> ByteContainer<'bytes> {
 
 impl ByteContainer<'static> {
     #[must_use]
-    pub fn from_owned(bytes: Vec<u8>) -> Self {
+    pub(crate) fn from_owned(bytes: Vec<u8>) -> Self {
         Self {
             inner: Owned(bytes),
         }
     }
 
     #[must_use]
-    pub fn from_mapped(pos: usize, len: usize, mapping: Arc<Mmap>) -> Self {
+    pub(crate) fn from_mapped(pos: usize, len: usize, mapping: Arc<Mmap>) -> Self {
         Self {
             inner: Mapped(Mapping { pos, len, mapping }),
         }
@@ -149,13 +149,13 @@ enum CompressableByteContainerInner<'bytes> {
 
 use CompressableByteContainerInner::*;
 
-pub struct CompressableByteContainer<'bytes> {
+pub(crate) struct CompressableByteContainer<'bytes> {
     inner: CompressableByteContainerInner<'bytes>,
 }
 
 impl<'bytes> CompressableByteContainer<'bytes> {
     #[must_use]
-    pub fn as_bytes(&self) -> &[u8] {
+    pub(crate) fn as_bytes(&self) -> &[u8] {
         match &self.inner {
             OwnedDecompressed(x) | OwnedCompressed(x, _) => x,
             BorrowedDecompressed(x) | BorrowedCompressed(x, _) => x,
@@ -164,7 +164,7 @@ impl<'bytes> CompressableByteContainer<'bytes> {
     }
 
     #[must_use]
-    pub fn as_ptr(&self) -> *const u8 {
+    pub(crate) fn as_ptr(&self) -> *const u8 {
         match &self.inner {
             OwnedDecompressed(x) | OwnedCompressed(x, _) => x.as_ptr(),
             BorrowedDecompressed(x) | BorrowedCompressed(x, _) => x.as_ptr(),
@@ -173,7 +173,7 @@ impl<'bytes> CompressableByteContainer<'bytes> {
     }
 
     #[must_use]
-    pub fn from_borrowed(bytes: &'bytes [u8], decompressed_len: Option<usize>) -> Self {
+    pub(crate) fn from_borrowed(bytes: &'bytes [u8], decompressed_len: Option<usize>) -> Self {
         Self {
             inner: match decompressed_len {
                 Some(len) => BorrowedCompressed(bytes, len),
@@ -183,7 +183,7 @@ impl<'bytes> CompressableByteContainer<'bytes> {
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         match &self.inner {
             OwnedDecompressed(x) | OwnedCompressed(x, _) => x.is_empty(),
             BorrowedDecompressed(x) | BorrowedCompressed(x, _) => x.is_empty(),
@@ -192,7 +192,7 @@ impl<'bytes> CompressableByteContainer<'bytes> {
     }
 
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         match &self.inner {
             OwnedDecompressed(x) | OwnedCompressed(x, _) => x.len(),
             BorrowedDecompressed(x) | BorrowedCompressed(x, _) => x.len(),
@@ -201,7 +201,7 @@ impl<'bytes> CompressableByteContainer<'bytes> {
     }
 
     #[must_use]
-    pub fn into_owned(self) -> CompressableByteContainer<'static> {
+    pub(crate) fn into_owned(self) -> CompressableByteContainer<'static> {
         CompressableByteContainer {
             inner: match self.inner {
                 OwnedDecompressed(x) => OwnedDecompressed(x),
@@ -215,7 +215,7 @@ impl<'bytes> CompressableByteContainer<'bytes> {
     }
 
     #[must_use]
-    pub fn decompressed_len(&self) -> Option<usize> {
+    pub(crate) fn decompressed_len(&self) -> Option<usize> {
         match &self.inner {
             OwnedDecompressed(_) | BorrowedDecompressed(_) | MappedDecompressed(_) => None,
             OwnedCompressed(_, x) | BorrowedCompressed(_, x) | MappedCompressed(_, x) => Some(*x),
@@ -223,7 +223,7 @@ impl<'bytes> CompressableByteContainer<'bytes> {
     }
 
     #[must_use]
-    pub fn is_compressed(&self) -> bool {
+    pub(crate) fn is_compressed(&self) -> bool {
         match &self.inner {
             OwnedDecompressed(_) | BorrowedDecompressed(_) | MappedDecompressed(_) => false,
             OwnedCompressed(_, _) | BorrowedCompressed(_, _) | MappedCompressed(_, _) => true,
@@ -233,7 +233,7 @@ impl<'bytes> CompressableByteContainer<'bytes> {
 
 impl CompressableByteContainer<'static> {
     #[must_use]
-    pub fn from_owned(bytes: Vec<u8>, decompressed_len: Option<usize>) -> Self {
+    pub(crate) fn from_owned(bytes: Vec<u8>, decompressed_len: Option<usize>) -> Self {
         Self {
             inner: match decompressed_len {
                 Some(len) => OwnedCompressed(bytes, len),

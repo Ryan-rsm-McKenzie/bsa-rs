@@ -7,14 +7,14 @@ use std::{
     sync::Arc,
 };
 
-pub enum Endian {
+pub(crate) enum Endian {
     Little,
     Big,
     #[allow(dead_code)]
     Native,
 }
 
-pub trait Source<'bytes> {
+pub(crate) trait Source<'bytes> {
     fn read_bytes(&mut self, buf: &mut [u8]) -> io::Result<()>;
 
     fn read_container(&mut self, len: usize) -> io::Result<ByteContainer<'bytes>>;
@@ -110,7 +110,7 @@ macro_rules! make_sourceable {
     };
 }
 
-pub struct BorrowedSource<'bytes> {
+pub(crate) struct BorrowedSource<'bytes> {
     source: &'bytes [u8],
     pos: usize,
 }
@@ -130,7 +130,7 @@ impl<'bytes> From<&'bytes [u8]> for BorrowedSource<'bytes> {
 
 make_sourceable!(BorrowedSource<'bytes>, 'bytes, 'bytes);
 
-pub struct CopiedSource<'bytes> {
+pub(crate) struct CopiedSource<'bytes> {
     source: &'bytes [u8],
     pos: usize,
 }
@@ -150,7 +150,7 @@ impl<'bytes> From<&'bytes [u8]> for CopiedSource<'bytes> {
 
 make_sourceable!(CopiedSource<'bytes>, 'static, 'bytes);
 
-pub struct MappedSource {
+pub(crate) struct MappedSource {
     source: Arc<Mmap>,
     pos: usize,
 }
@@ -177,7 +177,7 @@ impl TryFrom<&File> for MappedSource {
 
 make_sourceable!(MappedSource, 'static);
 
-pub trait BinaryReadable {
+pub(crate) trait BinaryReadable {
     type Item;
 
     fn from_ne_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
@@ -210,7 +210,7 @@ pub trait BinaryReadable {
     }
 }
 
-pub trait BinaryWriteable {
+pub(crate) trait BinaryWriteable {
     type Item: ?Sized;
 
     fn to_ne_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
@@ -402,7 +402,7 @@ make_binary_streamable_tuple!(0 T0, 1 T1, 2 T2, 3 T3, 4 T4, 5 T5, 6 T6, 7 T7);
 make_binary_streamable_tuple!(0 T0, 1 T1, 2 T2, 3 T3, 4 T4, 5 T5, 6 T6, 7 T7, 8 T8);
 make_binary_streamable_tuple!(0 T0, 1 T1, 2 T2, 3 T3, 4 T4, 5 T5, 6 T6, 7 T7, 8 T8, 9 T9);
 
-pub struct Sink<'stream, Out>
+pub(crate) struct Sink<'stream, Out>
 where
     Out: Write,
 {
@@ -414,25 +414,25 @@ where
     Out: Write,
 {
     #[must_use]
-    pub fn new(stream: &'stream mut Out) -> Self {
+    pub(crate) fn new(stream: &'stream mut Out) -> Self {
         Self { stream }
     }
 
-    pub fn write<T>(&mut self, item: &T, endian: Endian) -> io::Result<()>
+    pub(crate) fn write<T>(&mut self, item: &T, endian: Endian) -> io::Result<()>
     where
         T: BinaryWriteable<Item = T>,
     {
         T::to_stream(&mut self.stream, item, endian)
     }
 
-    pub fn write_protocol<T>(&mut self, item: &T::Item, endian: Endian) -> io::Result<()>
+    pub(crate) fn write_protocol<T>(&mut self, item: &T::Item, endian: Endian) -> io::Result<()>
     where
         T: BinaryWriteable,
     {
         T::to_stream(&mut self.stream, item, endian)
     }
 
-    pub fn write_bytes(&mut self, bytes: &[u8]) -> io::Result<()> {
+    pub(crate) fn write_bytes(&mut self, bytes: &[u8]) -> io::Result<()> {
         self.stream.write_all(bytes)
     }
 }

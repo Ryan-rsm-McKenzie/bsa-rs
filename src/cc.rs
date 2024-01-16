@@ -1,5 +1,5 @@
 #[must_use]
-pub const fn make_four(cc: &[u8]) -> u32 {
+pub(crate) const fn make_four(cc: &[u8]) -> u32 {
     let buffer = match cc.len() {
         0 => [0, 0, 0, 0],
         1 => [cc[0], 0, 0, 0],

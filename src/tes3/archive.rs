@@ -9,10 +9,10 @@ use bstr::BString;
 use std::io::Write;
 
 mod constants {
-    pub const FILE_ENTRY_SIZE: usize = 0x8;
-    pub const HASH_SIZE: usize = 0x8;
-    pub const HEADER_MAGIC: u32 = 0x100;
-    pub const HEADER_SIZE: usize = 0xC;
+    pub(crate) const FILE_ENTRY_SIZE: usize = 0x8;
+    pub(crate) const HASH_SIZE: usize = 0x8;
+    pub(crate) const HEADER_MAGIC: u32 = 0x100;
+    pub(crate) const HEADER_SIZE: usize = 0xC;
 }
 
 struct Offsets {
