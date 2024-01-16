@@ -73,77 +73,6 @@ impl<'bytes> Archive<'bytes> {
         Ok(())
     }
 
-    fn do_read<In>(source: &mut In) -> Result<ReadResult<Self>>
-    where
-        In: ?Sized + Source<'bytes>,
-    {
-        let header = Self::read_header(source)?;
-        let offsets = header.compute_offsets();
-        let mut map = Map::default();
-
-        for i in 0..header.file_count as usize {
-            let (key, value) = Self::read_file(source, i, &offsets)?;
-            map.insert(key, value);
-        }
-
-        Ok((Self { map },))
-    }
-
-    fn read_file<In>(source: &mut In, idx: usize, offsets: &Offsets) -> Result<(Key, File<'bytes>)>
-    where
-        In: ?Sized + Source<'bytes>,
-    {
-        let hash = source.save_restore_position(|source| -> Result<Hash> {
-            source.seek_absolute(offsets.hashes + constants::HASH_SIZE * idx)?;
-            Self::read_hash(source)
-        })??;
-
-        let name = source.save_restore_position(|source| -> Result<BString> {
-            source.seek_absolute(offsets.name_offsets + 0x4 * idx)?;
-            let offset: u32 = source.read(Endian::Little)?;
-            source.seek_absolute(offsets.names + offset as usize)?;
-            let name = source.read_protocol::<ZString>(Endian::Little)?;
-            Ok(name)
-        })??;
-
-        let (size, offset): (u32, u32) = source.read(Endian::Little)?;
-        let container = source.save_restore_position(|source| -> Result<Bytes<'bytes>> {
-            source.seek_absolute(offsets.file_data + offset as usize)?;
-            let result = source.read_bytes(size as usize)?;
-            Ok(result)
-        })??;
-
-        Ok((
-            Key {
-                hash: hash.into(),
-                name,
-            },
-            File { container },
-        ))
-    }
-
-    fn read_hash<In>(source: &mut In) -> Result<Hash>
-    where
-        In: ?Sized + Source<'bytes>,
-    {
-        let (lo, hi) = source.read(Endian::Little)?;
-        Ok(Hash { lo, hi })
-    }
-
-    fn read_header<In>(source: &mut In) -> Result<Header>
-    where
-        In: ?Sized + Source<'bytes>,
-    {
-        let (magic, hash_offset, file_count) = source.read(Endian::Little)?;
-        match magic {
-            constants::HEADER_MAGIC => Ok(Header {
-                hash_offset,
-                file_count,
-            }),
-            _ => Err(Error::InvalidMagic(magic)),
-        }
-    }
-
     fn make_header(&self) -> Result<Header> {
         Ok(Header {
             file_count: self.map.len().try_into()?,
@@ -229,6 +158,77 @@ impl<'bytes> Archive<'bytes> {
         }
 
         Ok(())
+    }
+
+    fn do_read<In>(source: &mut In) -> Result<ReadResult<Self>>
+    where
+        In: ?Sized + Source<'bytes>,
+    {
+        let header = Self::read_header(source)?;
+        let offsets = header.compute_offsets();
+        let mut map = Map::default();
+
+        for i in 0..header.file_count as usize {
+            let (key, value) = Self::read_file(source, i, &offsets)?;
+            map.insert(key, value);
+        }
+
+        Ok((Self { map },))
+    }
+
+    fn read_file<In>(source: &mut In, idx: usize, offsets: &Offsets) -> Result<(Key, File<'bytes>)>
+    where
+        In: ?Sized + Source<'bytes>,
+    {
+        let hash = source.save_restore_position(|source| -> Result<Hash> {
+            source.seek_absolute(offsets.hashes + constants::HASH_SIZE * idx)?;
+            Self::read_hash(source)
+        })??;
+
+        let name = source.save_restore_position(|source| -> Result<BString> {
+            source.seek_absolute(offsets.name_offsets + 0x4 * idx)?;
+            let offset: u32 = source.read(Endian::Little)?;
+            source.seek_absolute(offsets.names + offset as usize)?;
+            let name = source.read_protocol::<ZString>(Endian::Little)?;
+            Ok(name)
+        })??;
+
+        let (size, offset): (u32, u32) = source.read(Endian::Little)?;
+        let container = source.save_restore_position(|source| -> Result<Bytes<'bytes>> {
+            source.seek_absolute(offsets.file_data + offset as usize)?;
+            let result = source.read_bytes(size as usize)?;
+            Ok(result)
+        })??;
+
+        Ok((
+            Key {
+                hash: hash.into(),
+                name,
+            },
+            File { container },
+        ))
+    }
+
+    fn read_hash<In>(source: &mut In) -> Result<Hash>
+    where
+        In: ?Sized + Source<'bytes>,
+    {
+        let (lo, hi) = source.read(Endian::Little)?;
+        Ok(Hash { lo, hi })
+    }
+
+    fn read_header<In>(source: &mut In) -> Result<Header>
+    where
+        In: ?Sized + Source<'bytes>,
+    {
+        let (magic, hash_offset, file_count) = source.read(Endian::Little)?;
+        match magic {
+            constants::HEADER_MAGIC => Ok(Header {
+                hash_offset,
+                file_count,
+            }),
+            _ => Err(Error::InvalidMagic(magic)),
+        }
     }
 }
 
