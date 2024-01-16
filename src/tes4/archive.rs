@@ -26,6 +26,7 @@ bitflags::bitflags! {
         const RETAIN_STRINGS_DURING_STARTUP = 1 << 7;
         const EMBEDDED_FILE_NAMES = 1 << 8;
         const XBOX_COMPRESSED = 1 << 9;
+        const _ = !0;
     }
 }
 
@@ -100,6 +101,7 @@ bitflags::bitflags! {
         const TREES = 1 << 6;
         const FONTS = 1 << 7;
         const MISC = 1 << 8;
+        const _ = !0;
     }
 }
 
