@@ -3,7 +3,7 @@ use bstr::{BStr as ByteStr, BString as ByteString};
 use std::io::{self, Write};
 
 #[derive(Debug, thiserror::Error)]
-enum MalformedStringError {
+enum Error {
     #[error("postfix null-terminator was missing from read string")]
     MissingNullTerminator,
 
@@ -11,8 +11,8 @@ enum MalformedStringError {
     StringTooLarge,
 }
 
-impl From<MalformedStringError> for io::Error {
-    fn from(value: MalformedStringError) -> Self {
+impl From<Error> for io::Error {
+    fn from(value: Error) -> Self {
         Self::new(io::ErrorKind::InvalidData, value)
     }
 }
@@ -49,7 +49,7 @@ impl BinaryWriteable for BString {
                 stream.write_all(item)?;
                 Ok(())
             }
-            Err(_) => Err(MalformedStringError::StringTooLarge.into()),
+            Err(_) => Err(Error::StringTooLarge.into()),
         }
     }
 }
@@ -109,7 +109,7 @@ impl BinaryReadable for BZString {
                     result.shrink_to_fit();
                     Ok(result.into())
                 }
-                _ => Err(MalformedStringError::MissingNullTerminator.into()),
+                _ => Err(Error::MissingNullTerminator.into()),
             }
         } else {
             Ok(Self::Item::default())
@@ -132,7 +132,7 @@ impl BinaryWriteable for BZString {
                 stream.write_all(b"\0")?;
                 Ok(())
             }
-            Err(_) => Err(MalformedStringError::StringTooLarge.into()),
+            Err(_) => Err(Error::StringTooLarge.into()),
         }
     }
 }
