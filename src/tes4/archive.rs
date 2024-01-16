@@ -266,6 +266,11 @@ impl OptionsBuilder {
     }
 
     #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
     pub fn types(mut self, types: Types) -> Self {
         self.0.types = types;
         self
@@ -276,9 +281,10 @@ impl OptionsBuilder {
         self.0.version = version;
         self
     }
+}
 
-    #[must_use]
-    fn new() -> Self {
+impl Default for OptionsBuilder {
+    fn default() -> Self {
         Self(Options {
             version: Version::default(),
             flags: Flags::default(),

@@ -6,10 +6,10 @@ mod hashing;
 pub use self::{
     archive::{
         Archive, Flags as ArchiveFlags, Key as ArchiveKey, Options as ArchiveOptions,
-        Types as ArchiveTypes,
+        OptionsBuilder as ArchiveOptionsBuilder, Types as ArchiveTypes,
     },
     directory::{Directory, Key as DirectoryKey},
-    file::{File, Options as FileOptions},
+    file::{File, Options as FileOptions, OptionsBuilder as FileOptionsBuilder},
     hashing::{
         hash_directory, hash_directory_in_place, hash_file, hash_file_in_place, DirectoryHash,
         FileHash, Hash,

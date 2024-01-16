@@ -28,13 +28,19 @@ impl OptionsBuilder {
     }
 
     #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
     pub fn version(mut self, version: Version) -> Self {
         self.0.version = version;
         self
     }
+}
 
-    #[must_use]
-    fn new() -> Self {
+impl Default for OptionsBuilder {
+    fn default() -> Self {
         Self(Options {
             version: Version::default(),
             compression_codec: CompressionCodec::default(),
