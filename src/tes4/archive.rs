@@ -254,30 +254,35 @@ impl Key {
 pub struct OptionsBuilder(Options);
 
 impl OptionsBuilder {
+    #[must_use]
     pub fn build(self) -> Options {
         self.0
     }
 
+    #[must_use]
     pub fn flags(mut self, flags: Flags) -> Self {
         self.0.flags = flags;
         self
     }
 
+    #[must_use]
     pub fn types(mut self, types: Types) -> Self {
         self.0.types = types;
         self
     }
 
+    #[must_use]
     pub fn version(mut self, version: Version) -> Self {
         self.0.version = version;
         self
     }
 
+    #[must_use]
     fn new() -> Self {
         Self(Options {
-            version: Default::default(),
-            flags: Default::default(),
-            types: Default::default(),
+            version: Version::default(),
+            flags: Flags::default(),
+            types: Types::default(),
         })
     }
 }
@@ -290,18 +295,22 @@ pub struct Options {
 }
 
 impl Options {
+    #[must_use]
     pub fn builder() -> OptionsBuilder {
         OptionsBuilder::new()
     }
 
+    #[must_use]
     pub fn flags(&self) -> Flags {
         self.flags
     }
 
+    #[must_use]
     pub fn types(&self) -> Types {
         self.types
     }
 
+    #[must_use]
     pub fn version(&self) -> Version {
         self.version
     }

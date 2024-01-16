@@ -16,24 +16,28 @@ use std::io::Write;
 pub struct OptionsBuilder(Options);
 
 impl OptionsBuilder {
+    #[must_use]
     pub fn build(self) -> Options {
         self.0
     }
 
+    #[must_use]
     pub fn compression_options(mut self, compression_codec: CompressionCodec) -> Self {
         self.0.compression_codec = compression_codec;
         self
     }
 
+    #[must_use]
     pub fn version(mut self, version: Version) -> Self {
         self.0.version = version;
         self
     }
 
+    #[must_use]
     fn new() -> Self {
         Self(Options {
-            version: Default::default(),
-            compression_codec: Default::default(),
+            version: Version::default(),
+            compression_codec: CompressionCodec::default(),
         })
     }
 }
@@ -45,14 +49,17 @@ pub struct Options {
 }
 
 impl Options {
+    #[must_use]
     pub fn builder() -> OptionsBuilder {
         OptionsBuilder::new()
     }
 
+    #[must_use]
     pub fn compression_codec(&self) -> CompressionCodec {
         self.compression_codec
     }
 
+    #[must_use]
     pub fn version(&self) -> Version {
         self.version
     }
