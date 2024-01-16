@@ -1,7 +1,7 @@
-pub mod archive;
-pub mod directory;
-pub mod file;
-pub mod hashing;
+mod archive;
+mod directory;
+mod file;
+mod hashing;
 
 pub use self::{
     archive::{

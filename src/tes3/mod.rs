@@ -1,6 +1,6 @@
-pub mod archive;
-pub mod file;
-pub mod hashing;
+mod archive;
+mod file;
+mod hashing;
 
 pub use self::{
     archive::{Archive, Key as ArchiveKey},
