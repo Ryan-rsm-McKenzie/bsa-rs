@@ -248,6 +248,17 @@ macro_rules! mapping {
             }
         }
 
+        impl<'bytes> ::core::iter::FromIterator<($key, $value<'bytes>)> for $this<'bytes> {
+            fn from_iter<T>(iter: T) -> Self
+            where
+                T: ::core::iter::IntoIterator<Item = ($key, $value<'bytes>)>,
+            {
+                Self {
+                    map: iter.into_iter().collect(),
+                }
+            }
+        }
+
         impl<'bytes> ::core::iter::IntoIterator for $this<'bytes> {
             type Item = <$mapping<'bytes> as ::core::iter::IntoIterator>::Item;
             type IntoIter = <$mapping<'bytes> as ::core::iter::IntoIterator>::IntoIter;
