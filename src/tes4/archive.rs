@@ -250,12 +250,61 @@ impl Key {
     }
 }
 
-#[non_exhaustive]
-#[derive(Clone, Copy, Default)]
+#[repr(transparent)]
+pub struct OptionsBuilder(Options);
+
+impl OptionsBuilder {
+    pub fn build(self) -> Options {
+        self.0
+    }
+
+    pub fn flags(mut self, flags: Flags) -> Self {
+        self.0.flags = flags;
+        self
+    }
+
+    pub fn types(mut self, types: Types) -> Self {
+        self.0.types = types;
+        self
+    }
+
+    pub fn version(mut self, version: Version) -> Self {
+        self.0.version = version;
+        self
+    }
+
+    fn new() -> Self {
+        Self(Options {
+            version: Default::default(),
+            flags: Default::default(),
+            types: Default::default(),
+        })
+    }
+}
+
+#[derive(Clone, Copy)]
 pub struct Options {
-    pub version: Version,
-    pub flags: Flags,
-    pub types: Types,
+    version: Version,
+    flags: Flags,
+    types: Types,
+}
+
+impl Options {
+    pub fn builder() -> OptionsBuilder {
+        OptionsBuilder::new()
+    }
+
+    pub fn flags(&self) -> Flags {
+        self.flags
+    }
+
+    pub fn types(&self) -> Types {
+        self.types
+    }
+
+    pub fn version(&self) -> Version {
+        self.version
+    }
 }
 
 type ReadResult<T> = (T, Options);
@@ -788,7 +837,10 @@ impl<'bytes> Archive<'bytes> {
 mod tests {
     use crate::{
         prelude::*,
-        tes4::{Archive, ArchiveKey, DirectoryKey, Error, File, FileCompressionOptions},
+        tes4::{
+            Archive, ArchiveFlags, ArchiveKey, ArchiveOptions, Directory, DirectoryKey, Error,
+            File, FileOptions, Version,
+        },
     };
     use anyhow::Context as _;
     use memmap2::Mmap;
@@ -808,11 +860,7 @@ mod tests {
 
             let (bsa, options) = Archive::read(root.join(file_name).as_path())
                 .with_context(|| format!("failed to read archive: {file_name}"))?;
-            let compression_options = {
-                let mut x = FileCompressionOptions::default();
-                x.version = options.version;
-                x
-            };
+            let compression_options = FileOptions::builder().version(options.version).build();
 
             let files = ["License.txt", "Preview.png"];
             for file_name in files {

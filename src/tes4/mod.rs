@@ -9,7 +9,7 @@ pub use self::{
         Types as ArchiveTypes,
     },
     directory::{Directory, Key as DirectoryKey},
-    file::{CompressionOptions as FileCompressionOptions, File},
+    file::{File, Options as FileOptions},
     hashing::{hash_directory, hash_directory_in_place, hash_file, hash_file_in_place, Hash},
 };
 

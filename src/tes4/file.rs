@@ -12,11 +12,50 @@ use flate2::{
 use lzzzz::lz4f::{self, AutoFlush, PreferencesBuilder};
 use std::io::Write;
 
-#[non_exhaustive]
-#[derive(Clone, Copy, Default)]
-pub struct CompressionOptions {
-    pub version: Version,
-    pub compression_codec: CompressionCodec,
+#[repr(transparent)]
+pub struct OptionsBuilder(Options);
+
+impl OptionsBuilder {
+    pub fn build(self) -> Options {
+        self.0
+    }
+
+    pub fn compression_options(mut self, compression_codec: CompressionCodec) -> Self {
+        self.0.compression_codec = compression_codec;
+        self
+    }
+
+    pub fn version(mut self, version: Version) -> Self {
+        self.0.version = version;
+        self
+    }
+
+    fn new() -> Self {
+        Self(Options {
+            version: Default::default(),
+            compression_codec: Default::default(),
+        })
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Options {
+    version: Version,
+    compression_codec: CompressionCodec,
+}
+
+impl Options {
+    pub fn builder() -> OptionsBuilder {
+        OptionsBuilder::new()
+    }
+
+    pub fn compression_codec(&self) -> CompressionCodec {
+        self.compression_codec
+    }
+
+    pub fn version(&self) -> Version {
+        self.version
+    }
 }
 
 #[derive(Default)]
@@ -28,7 +67,7 @@ type ReadResult<T> = T;
 derive::container!(File => ReadResult);
 
 impl<'bytes> File<'bytes> {
-    pub fn compress(&self, options: &CompressionOptions) -> Result<File<'static>> {
+    pub fn compress(&self, options: &Options) -> Result<File<'static>> {
         let mut bytes = Vec::new();
         self.compress_into(&mut bytes, options)?;
         bytes.shrink_to_fit();
@@ -37,7 +76,7 @@ impl<'bytes> File<'bytes> {
         })
     }
 
-    pub fn compress_into(&self, out: &mut Vec<u8>, options: &CompressionOptions) -> Result<()> {
+    pub fn compress_into(&self, out: &mut Vec<u8>, options: &Options) -> Result<()> {
         if self.is_compressed() {
             Err(Error::AlreadyCompressed)
         } else {
@@ -51,7 +90,7 @@ impl<'bytes> File<'bytes> {
         }
     }
 
-    pub fn decompress(&self, options: &CompressionOptions) -> Result<File<'static>> {
+    pub fn decompress(&self, options: &Options) -> Result<File<'static>> {
         let mut bytes = Vec::new();
         self.decompress_into(&mut bytes, options)?;
         bytes.shrink_to_fit();
@@ -60,7 +99,7 @@ impl<'bytes> File<'bytes> {
         })
     }
 
-    pub fn decompress_into(&self, out: &mut Vec<u8>, options: &CompressionOptions) -> Result<()> {
+    pub fn decompress_into(&self, out: &mut Vec<u8>, options: &Options) -> Result<()> {
         let Some(decompressed_len) = self.decompressed_len() else {
             return Err(Error::AlreadyDecompressed);
         };
@@ -99,7 +138,7 @@ impl<'bytes> File<'bytes> {
         !self.is_compressed()
     }
 
-    pub fn write<Out>(&self, stream: &mut Out, options: &CompressionOptions) -> Result<()>
+    pub fn write<Out>(&self, stream: &mut Out, options: &Options) -> Result<()>
     where
         Out: ?Sized + Write,
     {
