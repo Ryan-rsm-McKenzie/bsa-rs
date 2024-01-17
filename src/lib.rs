@@ -8,6 +8,7 @@
 mod cc;
 mod containers;
 mod derive;
+pub mod fo4;
 mod hashing;
 mod io;
 mod protocols;
