@@ -70,15 +70,19 @@ pub enum CompressionCodec {
     //XMem,
 }
 
+#[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Version {
     #[default]
-    TES4 = 103,
-    FO3 = 104,
-    SSE = 105,
+    v103 = 103,
+    v104 = 104,
+    v105 = 105,
 }
 
 impl Version {
-    pub const FNV: Self = Self::FO3;
-    pub const TES5: Self = Self::FO3;
+    pub const TES4: Self = Self::v103;
+    pub const FO3: Self = Self::v104;
+    pub const FNV: Self = Self::v104;
+    pub const TES5: Self = Self::v104;
+    pub const SSE: Self = Self::v105;
 }

@@ -198,8 +198,8 @@ impl Header {
         let file_entries = {
             let directory_entries = constants::HEADER_SIZE as usize;
             let directory_entry_size = match self.version {
-                Version::TES4 | Version::FO3 => constants::DIRECTORY_ENTRY_SIZE_X86,
-                Version::SSE => constants::DIRECTORY_ENTRY_SIZE_X64,
+                Version::v103 | Version::v104 => constants::DIRECTORY_ENTRY_SIZE_X86,
+                Version::v105 => constants::DIRECTORY_ENTRY_SIZE_X64,
             };
             directory_entries + (directory_entry_size * self.directory_count as usize)
         };
@@ -468,7 +468,9 @@ impl<'bytes> Archive<'bytes> {
                     .iter()
                     .map(|(file_key, file)| {
                         let embedded_name = match options.version {
-                            Version::FO3 | Version::SSE if options.flags.embedded_file_names() => {
+                            Version::v104 | Version::v105
+                                if options.flags.embedded_file_names() =>
+                            {
                                 Some(Self::concat_directory_and_file_name(
                                     directory_key,
                                     file_key,
@@ -514,13 +516,13 @@ impl<'bytes> Archive<'bytes> {
         let file_count: u32 = directory.len().try_into()?;
         sink.write(&file_count, Endian::Little)?;
 
-        if options.version == Version::SSE {
+        if options.version == Version::v105 {
             sink.write(&0u32, Endian::Little)?;
         }
 
         sink.write(file_entries_offset, Endian::Little)?;
 
-        if options.version == Version::SSE {
+        if options.version == Version::v105 {
             sink.write(&0u32, Endian::Little)?;
         }
 
@@ -688,8 +690,8 @@ impl<'bytes> Archive<'bytes> {
         let file_count: u32 = source.read(Endian::Little)?;
         #[allow(clippy::cast_possible_wrap)]
         match header.version {
-            Version::TES4 | Version::FO3 => source.seek_relative(mem::size_of::<u32>() as isize)?,
-            Version::SSE => source.seek_relative((mem::size_of::<u32>() * 3) as isize)?,
+            Version::v103 | Version::v104 => source.seek_relative(mem::size_of::<u32>() as isize)?,
+            Version::v105 => source.seek_relative((mem::size_of::<u32>() * 3) as isize)?,
         }
 
         let mut map = DirectoryMap::default();
@@ -754,7 +756,7 @@ impl<'bytes> Archive<'bytes> {
                 source.seek_absolute(data_offset)?;
 
                 match header.version {
-                    Version::FO3 | Version::SSE if header.archive_flags.embedded_file_names() => {
+                    Version::v104 | Version::v105 if header.archive_flags.embedded_file_names() => {
                         let mut s = source.read_protocol::<protocols::BString>(Endian::Little)?;
                         data_size -= s.len() + 1; // include prefix byte
                         if let Some(pos) = s.iter().rposition(|&x| x == b'\\' || x == b'/') {
@@ -832,9 +834,9 @@ impl<'bytes> Archive<'bytes> {
         }
 
         let version = match version {
-            103 => Version::TES4,
-            104 => Version::FO3,
-            105 => Version::SSE,
+            103 => Version::v103,
+            104 => Version::v104,
+            105 => Version::v105,
             _ => return Err(Error::InvalidVersion(version)),
         };
 
@@ -1148,7 +1150,7 @@ mod tests {
             assert_eq!(options.flags(), flags);
             assert_eq!(main.len(), child.len());
 
-            let embedded_file_names = version != Version::TES4 && flags.embedded_file_names();
+            let embedded_file_names = version != Version::v103 && flags.embedded_file_names();
 
             for (info, mapping) in infos.iter().zip(&mappings) {
                 let archive_key: ArchiveKey = info.directory.name.into();
@@ -1187,7 +1189,7 @@ mod tests {
             Ok(())
         };
 
-        let versions = [Version::TES4, Version::FO3, Version::SSE];
+        let versions = [Version::v103, Version::v104, Version::v105];
         let flags = [
             ArchiveFlags::DIRECTORY_STRINGS,
             ArchiveFlags::FILE_STRINGS,

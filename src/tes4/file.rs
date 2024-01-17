@@ -83,11 +83,11 @@ impl<'bytes> File<'bytes> {
             Err(Error::AlreadyCompressed)
         } else {
             match options.version {
-                Version::TES4 => self.compress_into_zlib(out),
-                Version::FO3 => match options.compression_codec {
+                Version::v103 => self.compress_into_zlib(out),
+                Version::v104 => match options.compression_codec {
                     CompressionCodec::Normal => self.compress_into_zlib(out),
                 },
-                Version::SSE => self.compress_into_lz4(out),
+                Version::v105 => self.compress_into_lz4(out),
             }
         }
     }
@@ -99,11 +99,11 @@ impl<'bytes> File<'bytes> {
 
         out.reserve_exact(decompressed_len);
         let out_len = match options.version {
-            Version::TES4 => self.decompress_into_zlib(out),
-            Version::FO3 => match options.compression_codec {
+            Version::v103 => self.decompress_into_zlib(out),
+            Version::v104 => match options.compression_codec {
                 CompressionCodec::Normal => self.decompress_into_zlib(out),
             },
-            Version::SSE => self.decompress_into_lz4(out),
+            Version::v105 => self.decompress_into_lz4(out),
         }?;
 
         if out_len == decompressed_len {
