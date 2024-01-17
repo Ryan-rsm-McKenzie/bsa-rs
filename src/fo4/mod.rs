@@ -4,7 +4,11 @@ mod hashing;
 
 pub use self::{
     chunk::{Chunk, Options as ChunkOptions, OptionsBuilder as ChunkOptionsBuilder},
-    file::{CapacityError as FileCapacityError, File},
+    file::{
+        CapacityError as FileCapacityError, File, ReadOptions as FileReadOptions,
+        ReadOptionsBuilder as FileReadOptionsBuilder, WriteOptions as FileWriteOptions,
+        WriteOptionsBuilder as FileWriteOptionsBuilder,
+    },
     hashing::{hash_file, hash_file_in_place, FileHash, Hash},
 };
 
@@ -58,4 +62,20 @@ pub enum CompressionLevel {
 
 impl CompressionLevel {
     pub const FO76: Self = Self::FO4;
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Format {
+    #[default]
+    GNRL,
+    DX10,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Version {
+    #[default]
+    v1 = 1,
+    v2 = 2,
+    v3 = 3,
 }

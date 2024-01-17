@@ -1,4 +1,4 @@
-use crate::fo4::Chunk;
+use crate::fo4::{Chunk, CompressionFormat, CompressionLevel, Format};
 use core::{
     fmt::{self, Debug, Display, Formatter},
     ops::RangeBounds,
@@ -31,6 +31,163 @@ impl<'bytes> Display for CapacityError<'bytes> {
 }
 
 impl<'bytes> error::Error for CapacityError<'bytes> {}
+
+#[repr(transparent)]
+pub struct ReadOptionsBuilder(ReadOptions);
+
+impl ReadOptionsBuilder {
+    #[must_use]
+    pub fn build(self) -> ReadOptions {
+        self.0
+    }
+
+    #[must_use]
+    pub fn compression_format(mut self, compression_format: CompressionFormat) -> Self {
+        self.0.compression_format = compression_format;
+        self
+    }
+
+    #[must_use]
+    pub fn compression_level(mut self, compression_level: CompressionLevel) -> Self {
+        self.0.compression_level = compression_level;
+        self
+    }
+
+    #[must_use]
+    pub fn format(mut self, format: Format) -> Self {
+        self.0.format = format;
+        self
+    }
+
+    #[must_use]
+    pub fn mip_chunk_height(mut self, mip_chunk_height: usize) -> Self {
+        self.0.mip_chunk_height = mip_chunk_height;
+        self
+    }
+
+    #[must_use]
+    pub fn mip_chunk_width(mut self, mip_chunk_width: usize) -> Self {
+        self.0.mip_chunk_width = mip_chunk_width;
+        self
+    }
+
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for ReadOptionsBuilder {
+    fn default() -> Self {
+        Self(ReadOptions {
+            format: Format::GNRL,
+            mip_chunk_width: 0,
+            mip_chunk_height: 0,
+            compression_format: CompressionFormat::Zip,
+            compression_level: CompressionLevel::FO4,
+        })
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct ReadOptions {
+    format: Format,
+    mip_chunk_width: usize,
+    mip_chunk_height: usize,
+    compression_format: CompressionFormat,
+    compression_level: CompressionLevel,
+}
+
+impl ReadOptions {
+    #[must_use]
+    pub fn builder() -> ReadOptionsBuilder {
+        ReadOptionsBuilder::new()
+    }
+
+    #[must_use]
+    pub fn compression_format(&self) -> CompressionFormat {
+        self.compression_format
+    }
+
+    #[must_use]
+    pub fn compression_level(&self) -> CompressionLevel {
+        self.compression_level
+    }
+
+    #[must_use]
+    pub fn format(&self) -> Format {
+        self.format
+    }
+
+    #[must_use]
+    pub fn mip_chunk_height(&self) -> usize {
+        self.mip_chunk_height
+    }
+
+    #[must_use]
+    pub fn mip_chunk_width(&self) -> usize {
+        self.mip_chunk_width
+    }
+}
+
+#[repr(transparent)]
+pub struct WriteOptionsBuilder(WriteOptions);
+
+impl WriteOptionsBuilder {
+    #[must_use]
+    pub fn build(self) -> WriteOptions {
+        self.0
+    }
+
+    #[must_use]
+    pub fn compression_format(mut self, compression_format: CompressionFormat) -> Self {
+        self.0.compression_format = compression_format;
+        self
+    }
+
+    #[must_use]
+    pub fn format(mut self, format: Format) -> Self {
+        self.0.format = format;
+        self
+    }
+
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for WriteOptionsBuilder {
+    fn default() -> Self {
+        Self(WriteOptions {
+            format: Format::GNRL,
+            compression_format: CompressionFormat::Zip,
+        })
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct WriteOptions {
+    format: Format,
+    compression_format: CompressionFormat,
+}
+
+impl WriteOptions {
+    #[must_use]
+    pub fn builder() -> WriteOptionsBuilder {
+        WriteOptionsBuilder::new()
+    }
+
+    #[must_use]
+    pub fn compression_format(&self) -> CompressionFormat {
+        self.compression_format
+    }
+
+    #[must_use]
+    pub fn format(&self) -> Format {
+        self.format
+    }
+}
 
 #[derive(Default)]
 pub struct File<'bytes> {
