@@ -79,6 +79,6 @@ pub enum Version {
 }
 
 impl Version {
-    pub const FNV: Version = Version::FO3;
-    pub const TES5: Version = Version::FO3;
+    pub const FNV: Self = Self::FO3;
+    pub const TES5: Self = Self::FO3;
 }
