@@ -1,8 +1,10 @@
 mod chunk;
+mod file;
 mod hashing;
 
 pub use self::{
     chunk::{Chunk, Options as ChunkOptions, OptionsBuilder as ChunkOptionsBuilder},
+    file::{CapacityError as FileCapacityError, File},
     hashing::{hash_file, hash_file_in_place, FileHash, Hash},
 };
 
