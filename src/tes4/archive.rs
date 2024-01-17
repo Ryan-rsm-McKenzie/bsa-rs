@@ -791,7 +791,7 @@ impl<'bytes> Archive<'bytes> {
                 hash: hash.into(),
                 name: name.unwrap_or_default(),
             },
-            File { container },
+            File { bytes: container },
         ))
     }
 

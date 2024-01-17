@@ -1,9 +1,7 @@
 use crate::{
     containers::CompressableBytes,
     derive,
-    io::Source,
     tes4::{CompressionCodec, Error, Result, Version},
-    CompressableFrom,
 };
 use flate2::{
     write::{ZlibDecoder, ZlibEncoder},
@@ -73,22 +71,13 @@ impl Options {
 
 #[derive(Default)]
 pub struct File<'bytes> {
-    pub(crate) container: CompressableBytes<'bytes>,
+    pub(crate) bytes: CompressableBytes<'bytes>,
 }
 
 type ReadResult<T> = T;
-derive::container!(File => ReadResult);
+derive::compressable_bytes!(File => ReadResult);
 
 impl<'bytes> File<'bytes> {
-    pub fn compress(&self, options: &Options) -> Result<File<'static>> {
-        let mut bytes = Vec::new();
-        self.compress_into(&mut bytes, options)?;
-        bytes.shrink_to_fit();
-        Ok(File {
-            container: CompressableBytes::from_owned(bytes, Some(self.len())),
-        })
-    }
-
     pub fn compress_into(&self, out: &mut Vec<u8>, options: &Options) -> Result<()> {
         if self.is_compressed() {
             Err(Error::AlreadyCompressed)
@@ -101,15 +90,6 @@ impl<'bytes> File<'bytes> {
                 Version::SSE => self.compress_into_lz4(out),
             }
         }
-    }
-
-    pub fn decompress(&self, options: &Options) -> Result<File<'static>> {
-        let mut bytes = Vec::new();
-        self.decompress_into(&mut bytes, options)?;
-        bytes.shrink_to_fit();
-        Ok(File {
-            container: CompressableBytes::from_owned(bytes, None),
-        })
     }
 
     pub fn decompress_into(&self, out: &mut Vec<u8>, options: &Options) -> Result<()> {
@@ -136,44 +116,8 @@ impl<'bytes> File<'bytes> {
         }
     }
 
-    #[must_use]
-    pub fn decompressed_len(&self) -> Option<usize> {
-        self.container.decompressed_len()
-    }
-
-    #[must_use]
-    pub fn is_compressed(&self) -> bool {
-        self.container.is_compressed()
-    }
-
-    #[must_use]
-    pub fn is_decompressed(&self) -> bool {
-        !self.is_compressed()
-    }
-
-    pub fn write<Out>(&self, stream: &mut Out, options: &Options) -> Result<()>
-    where
-        Out: ?Sized + Write,
-    {
-        if self.is_compressed() {
-            let mut bytes = Vec::new();
-            self.decompress_into(&mut bytes, options)?;
-            stream.write_all(&bytes)?;
-        } else {
-            stream.write_all(self.as_bytes())?;
-        }
-
-        Ok(())
-    }
-
-    #[allow(clippy::unnecessary_wraps)]
-    fn do_read<In>(stream: &mut In) -> Result<ReadResult<Self>>
-    where
-        In: ?Sized + Source<'bytes>,
-    {
-        Ok(Self {
-            container: stream.read_bytes_to_end().into_compressable(None),
-        })
+    fn from_bytes(bytes: CompressableBytes<'_>) -> File<'_> {
+        File { bytes }
     }
 
     fn compress_into_lz4(&self, out: &mut Vec<u8>) -> Result<()> {
@@ -201,34 +145,6 @@ impl<'bytes> File<'bytes> {
         let mut d = ZlibDecoder::new(out);
         d.write_all(self.as_bytes())?;
         Ok(d.total_out().try_into()?)
-    }
-}
-
-impl<'bytes> CompressableFrom<&'bytes [u8]> for File<'bytes> {
-    fn from_compressed(value: &'bytes [u8], decompressed_len: usize) -> Self {
-        Self {
-            container: CompressableBytes::from_borrowed(value, Some(decompressed_len)),
-        }
-    }
-
-    fn from_decompressed(value: &'bytes [u8]) -> Self {
-        Self {
-            container: CompressableBytes::from_borrowed(value, None),
-        }
-    }
-}
-
-impl CompressableFrom<Vec<u8>> for File<'static> {
-    fn from_compressed(value: Vec<u8>, decompressed_len: usize) -> Self {
-        Self {
-            container: CompressableBytes::from_owned(value, Some(decompressed_len)),
-        }
-    }
-
-    fn from_decompressed(value: Vec<u8>) -> Self {
-        Self {
-            container: CompressableBytes::from_owned(value, None),
-        }
     }
 }
 

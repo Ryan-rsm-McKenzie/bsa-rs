@@ -90,7 +90,7 @@ impl<'bytes> Archive<'bytes> {
     {
         let mut offset: u32 = 0;
         for file in self.map.values() {
-            let size: u32 = file.container.len().try_into()?;
+            let size: u32 = file.bytes.len().try_into()?;
             sink.write(&(size, offset), Endian::Little)?;
             offset += size;
         }
@@ -205,7 +205,7 @@ impl<'bytes> Archive<'bytes> {
                 hash: hash.into(),
                 name,
             },
-            File { container },
+            File { bytes: container },
         ))
     }
 

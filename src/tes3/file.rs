@@ -8,11 +8,11 @@ use std::io::Write;
 
 #[derive(Default)]
 pub struct File<'bytes> {
-    pub(crate) container: Bytes<'bytes>,
+    pub(crate) bytes: Bytes<'bytes>,
 }
 
 type ReadResult<T> = T;
-derive::container!(File => ReadResult);
+derive::bytes!(File => ReadResult);
 
 impl<'bytes> File<'bytes> {
     pub fn write<Out>(&self, stream: &mut Out) -> Result<()>
@@ -29,7 +29,7 @@ impl<'bytes> File<'bytes> {
         In: ?Sized + Source<'bytes>,
     {
         Ok(Self {
-            container: stream.read_bytes_to_end(),
+            bytes: stream.read_bytes_to_end(),
         })
     }
 }
@@ -37,7 +37,7 @@ impl<'bytes> File<'bytes> {
 impl<'bytes> From<&'bytes [u8]> for File<'bytes> {
     fn from(value: &'bytes [u8]) -> Self {
         Self {
-            container: Bytes::from_borrowed(value),
+            bytes: Bytes::from_borrowed(value),
         }
     }
 }
@@ -45,7 +45,7 @@ impl<'bytes> From<&'bytes [u8]> for File<'bytes> {
 impl From<Vec<u8>> for File<'static> {
     fn from(value: Vec<u8>) -> Self {
         Self {
-            container: Bytes::from_owned(value),
+            bytes: Bytes::from_owned(value),
         }
     }
 }
