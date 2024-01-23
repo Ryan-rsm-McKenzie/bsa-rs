@@ -1,8 +1,10 @@
+mod archive;
 mod chunk;
 mod file;
 mod hashing;
 
 pub use self::{
+    archive::{Archive, Options as ArchiveOptions, OptionsBuilder as ArchiveOptionsBuilder},
     chunk::{
         Chunk, CompressionOptions as ChunkCompressionOptions,
         CompressionOptionsBuilder as ChunkCompressionOptionsBuilder, Extra as ChunkExtra,
@@ -38,6 +40,21 @@ pub enum Error {
 
     #[error("an operation on an integer would have truncated and corrupted data")]
     IntegralTruncation,
+
+    #[error("invalid sentinel read from chunk: {0}")]
+    InvalidChunkSentinel(u32),
+
+    #[error("invalid chunk size read from file header: {0}")]
+    InvalidChunkSize(u16),
+
+    #[error("invalid format read from archive header: {0}")]
+    InvalidFormat(u32),
+
+    #[error("invalid magic read from archive header: {0}")]
+    InvalidMagic(u32),
+
+    #[error("invalid version read from archive header: {0}")]
+    InvalidVersion(u32),
 
     #[error(transparent)]
     Io(#[from] io::Error),
@@ -81,7 +98,7 @@ pub enum Format {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Version {
     #[default]
     v1 = 1,

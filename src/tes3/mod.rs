@@ -17,7 +17,7 @@ pub enum Error {
     #[error("an operation on an integer would have truncated and corrupted data")]
     IntegralTruncation,
 
-    #[error("invalid magic read from file header: {0}")]
+    #[error("invalid magic read from archive header: {0}")]
     InvalidMagic(u32),
 
     #[error(transparent)]

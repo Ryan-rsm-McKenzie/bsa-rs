@@ -3,7 +3,7 @@ use crate::{
     derive,
     io::{Endian, Sink, Source},
     protocols::ZString,
-    tes3::{hashing, Error, File, FileHash, Hash, Result},
+    tes3::{self, Error, File, FileHash, Hash, Result},
 };
 use bstr::BString;
 use std::io::Write;
@@ -49,7 +49,7 @@ derive::key!(Key: FileHash);
 impl Key {
     #[must_use]
     fn hash_in_place(name: &mut BString) -> FileHash {
-        hashing::hash_file_in_place(name)
+        tes3::hash_file_in_place(name)
     }
 }
 
@@ -263,7 +263,7 @@ mod tests {
         let path = Path::new("data/tes3_invalid_test/invalid_magic.bsa");
         match Archive::read(path) {
             Err(Error::InvalidMagic(0x200)) => Ok(()),
-            Err(err) => Err(anyhow::Error::from(err)),
+            Err(err) => Err(err.into()),
             Ok(_) => anyhow::bail!("read should have failed"),
         }
     }
@@ -276,7 +276,7 @@ mod tests {
                 assert_eq!(io.kind(), io::ErrorKind::UnexpectedEof);
                 Ok(())
             }
-            Err(err) => Err(anyhow::Error::from(err)),
+            Err(err) => Err(err.into()),
             Ok(_) => anyhow::bail!("read should have failed"),
         }
     }
@@ -369,7 +369,7 @@ mod tests {
         let stream = {
             let mut archive = Archive::new();
             for (data, info) in mmapped.iter().zip(&infos) {
-                let file = File::from(&data[..]);
+                let file: File = data[..].into();
                 assert!(archive.insert(info.key.clone(), file).is_none());
             }
             let mut result = Vec::<u8>::new();

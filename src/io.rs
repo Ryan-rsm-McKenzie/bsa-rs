@@ -7,10 +7,10 @@ use std::{
     sync::Arc,
 };
 
+#[derive(Clone, Copy)]
 pub(crate) enum Endian {
     Little,
     Big,
-    #[allow(dead_code)]
     Native,
 }
 
@@ -188,20 +188,23 @@ pub(crate) trait BinaryReadable {
 
     fn from_ne_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
     where
-        In: ?Sized + Source<'bytes>;
+        In: ?Sized + Source<'bytes>,
+    {
+        Self::from_stream(stream, Endian::Native)
+    }
 
     fn from_be_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
     where
         In: ?Sized + Source<'bytes>,
     {
-        Self::from_ne_stream(stream)
+        Self::from_stream(stream, Endian::Big)
     }
 
     fn from_le_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
     where
         In: ?Sized + Source<'bytes>,
     {
-        Self::from_ne_stream(stream)
+        Self::from_stream(stream, Endian::Little)
     }
 
     fn from_stream<'bytes, In>(stream: &mut In, endian: Endian) -> io::Result<Self::Item>
@@ -219,27 +222,34 @@ pub(crate) trait BinaryReadable {
 pub(crate) trait BinaryWriteable {
     type Item: ?Sized;
 
-    fn to_ne_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
+    fn to_ne_stream<Out>(stream: &mut Sink<'_, Out>, item: &Self::Item) -> io::Result<()>
     where
-        Out: ?Sized + Write;
-
-    fn to_be_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
-    where
-        Out: ?Sized + Write,
+        Out: Write,
     {
-        Self::to_ne_stream(stream, item)
+        Self::to_stream(stream, item, Endian::Native)
     }
 
-    fn to_le_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
+    fn to_be_stream<Out>(stream: &mut Sink<'_, Out>, item: &Self::Item) -> io::Result<()>
     where
-        Out: ?Sized + Write,
+        Out: Write,
     {
-        Self::to_ne_stream(stream, item)
+        Self::to_stream(stream, item, Endian::Big)
     }
 
-    fn to_stream<Out>(stream: &mut Out, item: &Self::Item, endian: Endian) -> io::Result<()>
+    fn to_le_stream<Out>(stream: &mut Sink<'_, Out>, item: &Self::Item) -> io::Result<()>
     where
-        Out: ?Sized + Write,
+        Out: Write,
+    {
+        Self::to_stream(stream, item, Endian::Little)
+    }
+
+    fn to_stream<Out>(
+        stream: &mut Sink<'_, Out>,
+        item: &Self::Item,
+        endian: Endian,
+    ) -> io::Result<()>
+    where
+        Out: Write,
     {
         match endian {
             Endian::Big => Self::to_be_stream(stream, item),
@@ -285,28 +295,28 @@ macro_rules! make_binary_streamable {
         impl BinaryWriteable for $t {
             type Item = $t;
 
-            fn to_be_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
+            fn to_be_stream<Out>(stream: &mut Sink<'_, Out>, item: &Self::Item) -> io::Result<()>
             where
-                Out: ?Sized + Write,
+                Out: Write,
             {
                 let mut bytes = item.to_be_bytes();
-                stream.write_all(&mut bytes)
+                stream.write_bytes(&mut bytes)
             }
 
-            fn to_le_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
+            fn to_le_stream<Out>(stream: &mut Sink<'_, Out>, item: &Self::Item) -> io::Result<()>
             where
-                Out: ?Sized + Write,
+                Out: Write,
             {
                 let mut bytes = item.to_le_bytes();
-                stream.write_all(&mut bytes)
+                stream.write_bytes(&mut bytes)
             }
 
-            fn to_ne_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
+            fn to_ne_stream<Out>(stream: &mut Sink<'_, Out>, item: &Self::Item) -> io::Result<()>
             where
-                Out: ?Sized + Write,
+                Out: Write,
             {
                 let mut bytes = item.to_ne_bytes();
-                stream.write_all(&mut bytes)
+                stream.write_bytes(&mut bytes)
             }
         }
     };
@@ -364,9 +374,9 @@ macro_rules! make_binary_streamable_tuple {
         {
             type Item = ($($t::Item,)+);
 
-            fn to_be_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
+            fn to_be_stream<Out>(stream: &mut Sink<'_, Out>, item: &Self::Item) -> io::Result<()>
             where
-                Out: ?Sized + Write,
+                Out: Write,
             {
                 $(
                     $t::to_be_stream(stream, &item.$idx)?;
@@ -374,9 +384,9 @@ macro_rules! make_binary_streamable_tuple {
                 Ok(())
             }
 
-            fn to_le_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
+            fn to_le_stream<Out>(stream: &mut Sink<'_, Out>, item: &Self::Item) -> io::Result<()>
             where
-                Out: ?Sized + Write,
+                Out: Write,
             {
                 $(
                     $t::to_le_stream(stream, &item.$idx)?;
@@ -384,9 +394,9 @@ macro_rules! make_binary_streamable_tuple {
                 Ok(())
             }
 
-            fn to_ne_stream<Out>(stream: &mut Out, item: &Self::Item) -> io::Result<()>
+            fn to_ne_stream<Out>(stream: &mut Sink<'_, Out>, item: &Self::Item) -> io::Result<()>
             where
-                Out: ?Sized + Write,
+                Out: Write,
             {
                 $(
                     $t::to_ne_stream(stream, &item.$idx)?;
@@ -428,14 +438,14 @@ where
     where
         T: BinaryWriteable<Item = T>,
     {
-        T::to_stream(&mut self.stream, item, endian)
+        T::to_stream(self, item, endian)
     }
 
     pub(crate) fn write_protocol<T>(&mut self, item: &T::Item, endian: Endian) -> io::Result<()>
     where
         T: BinaryWriteable,
     {
-        T::to_stream(&mut self.stream, item, endian)
+        T::to_stream(self, item, endian)
     }
 
     pub(crate) fn write_bytes(&mut self, bytes: &[u8]) -> io::Result<()> {

@@ -1214,7 +1214,7 @@ mod tests {
         let path = Path::new("data/tes4_invalid_test/invalid_magic.bsa");
         match Archive::read(path) {
             Err(Error::InvalidMagic(0x00324142)) => Ok(()),
-            Err(err) => Err(anyhow::Error::from(err)),
+            Err(err) => Err(err.into()),
             Ok(_) => anyhow::bail!("read should have failed"),
         }
     }
@@ -1224,7 +1224,7 @@ mod tests {
         let path = Path::new("data/tes4_invalid_test/invalid_size.bsa");
         match Archive::read(path) {
             Err(Error::InvalidHeaderSize(0xCC)) => Ok(()),
-            Err(err) => Err(anyhow::Error::from(err)),
+            Err(err) => Err(err.into()),
             Ok(_) => anyhow::bail!("read should have failed"),
         }
     }
@@ -1247,7 +1247,7 @@ mod tests {
                 assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
                 Ok(())
             }
-            Err(err) => Err(anyhow::Error::from(err)),
+            Err(err) => Err(err.into()),
             Ok(_) => anyhow::bail!("read should have failed"),
         }
     }
