@@ -12,7 +12,8 @@ pub struct File<'bytes> {
 }
 
 type ReadResult<T> = T;
-derive::bytes!(File => ReadResult);
+derive::bytes!(File);
+derive::reader!(File => ReadResult);
 
 impl<'bytes> File<'bytes> {
     pub fn write<Out>(&self, stream: &mut Out) -> Result<()>

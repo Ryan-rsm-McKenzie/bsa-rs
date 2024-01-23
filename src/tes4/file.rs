@@ -75,7 +75,8 @@ pub struct File<'bytes> {
 }
 
 type ReadResult<T> = T;
-derive::compressable_bytes!(File => ReadResult);
+derive::compressable_bytes!(File);
+derive::reader!(File => ReadResult);
 
 impl<'bytes> File<'bytes> {
     pub fn compress_into(&self, out: &mut Vec<u8>, options: &Options) -> Result<()> {
@@ -145,6 +146,16 @@ impl<'bytes> File<'bytes> {
         let mut d = ZlibDecoder::new(out);
         d.write_all(self.as_bytes())?;
         Ok(d.total_out().try_into()?)
+    }
+
+    #[allow(clippy::unnecessary_wraps)]
+    fn do_read<In>(stream: &mut In) -> Result<ReadResult<Self>>
+    where
+        In: ?::core::marker::Sized + crate::io::Source<'bytes>,
+    {
+        Ok(Self::from_bytes(
+            stream.read_bytes_to_end().into_compressable(None),
+        ))
     }
 }
 

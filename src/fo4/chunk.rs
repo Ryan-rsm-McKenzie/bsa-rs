@@ -96,8 +96,7 @@ pub struct Chunk<'bytes> {
     pub extra: Extra,
 }
 
-type ReadResult<T> = T;
-derive::compressable_bytes!(Chunk => ReadResult);
+derive::compressable_bytes!(Chunk);
 
 impl<'bytes> Chunk<'bytes> {
     pub fn compress_into(&self, out: &mut Vec<u8>, options: &Options) -> Result<()> {
