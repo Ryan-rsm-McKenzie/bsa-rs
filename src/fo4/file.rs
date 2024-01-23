@@ -10,7 +10,7 @@ use core::{
     ptr::NonNull,
     result, slice,
 };
-use directxtex::{Image, ScratchImage, CP_FLAGS, DDS_FLAGS};
+use directxtex::{ScratchImage, CP_FLAGS, DDS_FLAGS};
 use std::{error, fs, path::Path};
 
 pub struct CapacityError<'bytes>(Chunk<'bytes>);
@@ -388,7 +388,7 @@ impl<'bytes> File<'bytes> {
         }
     }
 
-    fn read_dx10<In>(stream: &mut In, options: &ReadOptions) -> Result<Self>
+    fn read_dx10<In>(stream: &In, options: &ReadOptions) -> Result<Self>
     where
         In: ?Sized + Source<'bytes>,
     {
@@ -401,7 +401,7 @@ impl<'bytes> File<'bytes> {
             width: meta.width.try_into()?,
             mip_count: meta.mip_levels.try_into()?,
             format: meta.format.bits().try_into()?,
-            flags: if is_cubemap { 1 } else { 0 },
+            flags: u8::from(is_cubemap),
             tile_mode: 8,
         };
 
@@ -467,6 +467,7 @@ impl<'bytes> File<'bytes> {
         Ok(Self { chunks, header })
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn read_gnrl<In>(stream: &mut In) -> Result<Self>
     where
         In: ?Sized + Source<'bytes>,
