@@ -43,8 +43,8 @@ impl<'bytes> From<&'bytes [u8]> for File<'bytes> {
     }
 }
 
-impl From<Vec<u8>> for File<'static> {
-    fn from(value: Vec<u8>) -> Self {
+impl From<Box<[u8]>> for File<'static> {
+    fn from(value: Box<[u8]>) -> Self {
         Self {
             bytes: Bytes::from_owned(value),
         }
