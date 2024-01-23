@@ -5,10 +5,11 @@ use crate::{
         self, Chunk, ChunkDX10, ChunkExtra, CompressionFormat, Error, File, FileDX10, FileHash,
         FileHeader, Format, Hash, Result, Version,
     },
-    io::{Endian, Source},
+    io::{Endian, Sink, Source},
     protocols::WString,
 };
 use bstr::BString;
+use std::io::Write;
 
 mod constants {
     use crate::cc;
@@ -18,10 +19,54 @@ mod constants {
     pub(crate) const GNRL: u32 = cc::make_four(b"GNRL");
     pub(crate) const DX10: u32 = cc::make_four(b"DX10");
 
-    pub(crate) const CHUNK_GNRL: u16 = 0x14;
-    pub(crate) const CHUNK_DX10: u16 = 0x18;
+    pub(crate) const HEADER_SIZE_V1: usize = 0x18;
+    pub(crate) const HEADER_SIZE_V2: usize = 0x20;
+    pub(crate) const HEADER_SIZE_V3: usize = 0x24;
+
+    pub(crate) const FILE_HEADER_SIZE_GNRL: usize = 0x10;
+    pub(crate) const FILE_HEADER_SIZE_DX10: usize = 0x18;
+
+    pub(crate) const CHUNK_SIZE_GNRL: u16 = 0x14;
+    pub(crate) const CHUNK_SIZE_DX10: u16 = 0x18;
 
     pub(crate) const CHUNK_SENTINEL: u32 = 0xBAAD_F00D;
+}
+
+struct Offsets {
+    file_data: usize,
+    strings: usize,
+}
+
+impl Offsets {
+    #[must_use]
+    pub fn new(archive: &Archive, options: Options) -> Self {
+        let chunks_offset = match options.version {
+            Version::v1 => constants::HEADER_SIZE_V1,
+            Version::v2 => constants::HEADER_SIZE_V2,
+            Version::v3 => constants::HEADER_SIZE_V3,
+        };
+
+        let file_data_offset = {
+            let (file_header_size, chunk_size) = match options.format {
+                Format::GNRL => (constants::FILE_HEADER_SIZE_GNRL, constants::CHUNK_SIZE_GNRL),
+                Format::DX10 => (constants::FILE_HEADER_SIZE_DX10, constants::CHUNK_SIZE_DX10),
+            };
+            let chunks_count: usize = archive.values().map(File::len).sum();
+            chunks_offset
+                + (archive.len() * file_header_size)
+                + (chunks_count * usize::from(chunk_size))
+        };
+
+        let strings_offset = {
+            let data_size: usize = archive.values().flat_map(File::iter).map(Chunk::len).sum();
+            file_data_offset + data_size
+        };
+
+        Self {
+            file_data: file_data_offset,
+            strings: strings_offset,
+        }
+    }
 }
 
 struct Header {
@@ -120,6 +165,176 @@ type ReadResult<T> = (T, Options);
 derive::archive!(Archive => ReadResult, Map: (Key: FileHash) => File);
 
 impl<'bytes> Archive<'bytes> {
+    pub fn write<Out>(&self, stream: &mut Out, options: &Options) -> Result<()>
+    where
+        Out: Write,
+    {
+        let mut sink = Sink::new(stream);
+        let (header, mut offsets) = self.make_header(*options)?;
+        Self::write_header(&mut sink, &header)?;
+
+        for (key, file) in self {
+            Self::write_file(&mut sink, &header, &mut offsets, &key.hash, file)?;
+        }
+
+        for file in self.values() {
+            for chunk in file {
+                sink.write_bytes(chunk.as_bytes())?;
+            }
+        }
+
+        if options.strings {
+            for key in self.keys() {
+                sink.write_protocol::<WString>(key.name.as_ref(), Endian::Little)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn make_header(&self, options: Options) -> Result<(Header, Offsets)> {
+        let offsets = Offsets::new(self, options);
+        Ok((
+            Header {
+                version: options.version,
+                format: options.format,
+                file_count: self.len().try_into()?,
+                string_table_offset: if options.strings {
+                    offsets.strings as u64
+                } else {
+                    0
+                },
+                compression_format: options.compression_format,
+            },
+            offsets,
+        ))
+    }
+
+    fn write_chunk<Out>(
+        sink: &mut Sink<Out>,
+        header: &Header,
+        offsets: &mut Offsets,
+        chunk: &Chunk<'bytes>,
+    ) -> Result<()>
+    where
+        Out: Write,
+    {
+        let data_offset: u64 = offsets.file_data.try_into()?;
+        offsets.file_data += chunk.len();
+        let (compressed_size, decompressed_size): (u32, u32) =
+            if let Some(decompressed_len) = chunk.decompressed_len() {
+                (chunk.len().try_into()?, decompressed_len.try_into()?)
+            } else {
+                (0, chunk.len().try_into()?)
+            };
+        sink.write(
+            &(data_offset, compressed_size, decompressed_size),
+            Endian::Little,
+        )?;
+
+        match (header.format, &chunk.extra) {
+            (Format::GNRL, ChunkExtra::GNRL) => (),
+            (Format::DX10, ChunkExtra::DX10(x)) => {
+                sink.write(&(x.mips.start, x.mips.end), Endian::Little)?;
+            }
+            _ => {
+                return Err(Error::FormatMismatch);
+            }
+        }
+
+        sink.write(&constants::CHUNK_SENTINEL, Endian::Little)?;
+        Ok(())
+    }
+
+    fn write_file<Out>(
+        sink: &mut Sink<Out>,
+        header: &Header,
+        offsets: &mut Offsets,
+        hash: &FileHash,
+        file: &File<'bytes>,
+    ) -> Result<()>
+    where
+        Out: Write,
+    {
+        Self::write_hash(sink, hash)?;
+
+        let chunk_count: u8 = file.len().try_into()?;
+        let chunk_size = match header.format {
+            Format::GNRL => constants::CHUNK_SIZE_GNRL,
+            Format::DX10 => constants::CHUNK_SIZE_DX10,
+        };
+        sink.write(&(0u8, chunk_count, chunk_size), Endian::Little)?;
+
+        match (header.format, &file.header) {
+            (Format::GNRL, FileHeader::GNRL) => (),
+            (Format::DX10, FileHeader::DX10(x)) => {
+                sink.write(
+                    &(
+                        x.height,
+                        x.width,
+                        x.mip_count,
+                        x.format,
+                        x.flags,
+                        x.tile_mode,
+                    ),
+                    Endian::Little,
+                )?;
+            }
+            (_, _) => {
+                return Err(Error::FormatMismatch);
+            }
+        }
+
+        for chunk in file {
+            Self::write_chunk(sink, header, offsets, chunk)?;
+        }
+
+        Ok(())
+    }
+
+    fn write_hash<Out>(sink: &mut Sink<Out>, hash: &Hash) -> Result<()>
+    where
+        Out: Write,
+    {
+        sink.write(&(hash.file, hash.extension, hash.directory), Endian::Little)?;
+        Ok(())
+    }
+
+    fn write_header<Out>(sink: &mut Sink<Out>, header: &Header) -> Result<()>
+    where
+        Out: Write,
+    {
+        let format = match header.format {
+            Format::GNRL => constants::GNRL,
+            Format::DX10 => constants::DX10,
+        };
+
+        sink.write(
+            &(
+                constants::MAGIC,
+                header.version as u32,
+                format,
+                header.file_count,
+                header.string_table_offset,
+            ),
+            Endian::Little,
+        )?;
+
+        if header.version >= Version::v2 {
+            sink.write(&1u64, Endian::Little)?;
+        }
+
+        if header.version >= Version::v3 {
+            let format: u32 = match header.compression_format {
+                CompressionFormat::Zip => 0,
+                CompressionFormat::LZ4 => 3,
+            };
+            sink.write(&format, Endian::Little)?;
+        }
+
+        Ok(())
+    }
+
     fn do_read<In>(source: &mut In) -> Result<ReadResult<Self>>
     where
         In: ?Sized + Source<'bytes>,
@@ -203,7 +418,7 @@ impl<'bytes> Archive<'bytes> {
         let (_, chunk_count, chunk_size): (u8, u8, u16) = source.read(Endian::Little)?;
         if !matches!(
             (header.format, chunk_size),
-            (Format::GNRL, constants::CHUNK_GNRL) | (Format::DX10, constants::CHUNK_DX10)
+            (Format::GNRL, constants::CHUNK_SIZE_GNRL) | (Format::DX10, constants::CHUNK_SIZE_DX10)
         ) {
             return Err(Error::InvalidChunkSize(chunk_size));
         }

@@ -38,6 +38,11 @@ pub enum Error {
     #[error("error while working with a dds file")]
     DX10(#[from] HResultError),
 
+    #[error(
+        "attempted to write an archive in a format that does not match a file/chunk in the archive"
+    )]
+    FormatMismatch,
+
     #[error("an operation on an integer would have truncated and corrupted data")]
     IntegralTruncation,
 

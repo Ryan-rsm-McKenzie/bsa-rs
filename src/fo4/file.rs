@@ -275,6 +275,14 @@ impl<'bytes> File<'bytes> {
         self.len() == self.capacity()
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = &Chunk<'bytes>> {
+        self.chunks.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Chunk<'bytes>> {
+        self.chunks.iter_mut()
+    }
+
     #[must_use]
     pub fn len(&self) -> usize {
         self.chunks.len()
