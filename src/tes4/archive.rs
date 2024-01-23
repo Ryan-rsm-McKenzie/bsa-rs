@@ -252,6 +252,7 @@ impl Key {
     }
 }
 
+#[derive(Debug, Default)]
 #[repr(transparent)]
 pub struct OptionsBuilder(Options);
 
@@ -285,17 +286,7 @@ impl OptionsBuilder {
     }
 }
 
-impl Default for OptionsBuilder {
-    fn default() -> Self {
-        Self(Options {
-            version: Version::default(),
-            flags: Flags::default(),
-            types: Types::default(),
-        })
-    }
-}
-
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Options {
     version: Version,
     flags: Flags,
@@ -866,7 +857,7 @@ mod tests {
         prelude::*,
         tes4::{
             Archive, ArchiveFlags, ArchiveKey, ArchiveOptions, Directory, DirectoryKey, Error,
-            File, FileOptions, Version,
+            File, FileCompressionOptions, Version,
         },
         Borrowed,
     };
@@ -891,7 +882,9 @@ mod tests {
 
             let (bsa, options) = Archive::read(root.join(file_name).as_path())
                 .with_context(|| format!("failed to read archive: {file_name}"))?;
-            let compression_options = FileOptions::builder().version(options.version).build();
+            let compression_options = FileCompressionOptions::builder()
+                .version(options.version)
+                .build();
 
             let files = ["License.txt", "Preview.png"];
             for file_name in files {
@@ -912,7 +905,7 @@ mod tests {
                     as u64;
                 assert_eq!(decompressed_len, metadata.len());
 
-                let decompressed_from_disk = File::read(path.as_path())
+                let decompressed_from_disk = File::read(path.as_path(), &Default::default())
                     .with_context(|| format!("failed to read file from disk: {path:?}"))?;
                 let compressed_from_disk = decompressed_from_disk
                     .compress(&compression_options)
@@ -1174,7 +1167,7 @@ mod tests {
                 }
 
                 let decompressed_file = if file.1.is_compressed() {
-                    let options = FileOptions::builder().version(version).build();
+                    let options = FileCompressionOptions::builder().version(version).build();
                     let result = file.1.decompress(&options).with_context(|| {
                         format!("failed to decompress file: {}", info.file.name)
                     })?;

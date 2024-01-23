@@ -40,8 +40,23 @@ pub trait CompressableFrom<T>: Sealed {
     fn from_decompressed(value: T) -> Self;
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CompressionResult {
+    Compressed,
+    #[default]
+    Decompressed,
+}
+
+pub trait ReaderWithOptions<T>: Sealed {
+    type Error;
+    type Item;
+    type Options;
+
+    fn read(source: T, options: &Self::Options) -> core::result::Result<Self::Item, Self::Error>;
+}
+
 pub use bstr::{BStr, BString};
 
 pub mod prelude {
-    pub use crate::{fo4::FileReader as _, CompressableFrom as _, Reader as _};
+    pub use crate::{CompressableFrom as _, Reader as _, ReaderWithOptions as _};
 }

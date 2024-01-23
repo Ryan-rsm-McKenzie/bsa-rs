@@ -11,12 +11,13 @@ use flate2::{
 use lzzzz::{lz4, lz4_hc};
 use std::io::Write;
 
+#[derive(Debug, Default)]
 #[repr(transparent)]
-pub struct OptionsBuilder(Options);
+pub struct CompressionOptionsBuilder(CompressionOptions);
 
-impl OptionsBuilder {
+impl CompressionOptionsBuilder {
     #[must_use]
-    pub fn build(self) -> Options {
+    pub fn build(self) -> CompressionOptions {
         self.0
     }
 
@@ -38,25 +39,16 @@ impl OptionsBuilder {
     }
 }
 
-impl Default for OptionsBuilder {
-    fn default() -> Self {
-        Self(Options {
-            compression_format: CompressionFormat::default(),
-            compression_level: CompressionLevel::default(),
-        })
-    }
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CompressionOptions {
+    pub(crate) compression_format: CompressionFormat,
+    pub(crate) compression_level: CompressionLevel,
 }
 
-#[derive(Clone, Copy)]
-pub struct Options {
-    compression_format: CompressionFormat,
-    compression_level: CompressionLevel,
-}
-
-impl Options {
+impl CompressionOptions {
     #[must_use]
-    pub fn builder() -> OptionsBuilder {
-        OptionsBuilder::new()
+    pub fn builder() -> CompressionOptionsBuilder {
+        CompressionOptionsBuilder::new()
     }
 
     #[must_use]
@@ -96,10 +88,10 @@ pub struct Chunk<'bytes> {
     pub extra: Extra,
 }
 
-derive::compressable_bytes!(Chunk);
+derive::compressable_bytes!(Chunk: CompressionOptions);
 
 impl<'bytes> Chunk<'bytes> {
-    pub fn compress_into(&self, out: &mut Vec<u8>, options: &Options) -> Result<()> {
+    pub fn compress_into(&self, out: &mut Vec<u8>, options: &CompressionOptions) -> Result<()> {
         if self.is_compressed() {
             Err(Error::AlreadyCompressed)
         } else {
@@ -118,7 +110,7 @@ impl<'bytes> Chunk<'bytes> {
         }
     }
 
-    pub fn decompress_into(&self, out: &mut Vec<u8>, options: &Options) -> Result<()> {
+    pub fn decompress_into(&self, out: &mut Vec<u8>, options: &CompressionOptions) -> Result<()> {
         let Some(decompressed_len) = self.decompressed_len() else {
             return Err(Error::AlreadyDecompressed);
         };

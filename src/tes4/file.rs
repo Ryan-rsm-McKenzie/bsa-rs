@@ -2,6 +2,7 @@ use crate::{
     containers::CompressableBytes,
     derive,
     tes4::{CompressionCodec, Error, Result, Version},
+    CompressionResult,
 };
 use flate2::{
     write::{ZlibDecoder, ZlibEncoder},
@@ -10,17 +11,18 @@ use flate2::{
 use lzzzz::lz4f::{self, AutoFlush, PreferencesBuilder};
 use std::io::Write;
 
+#[derive(Debug, Default)]
 #[repr(transparent)]
-pub struct OptionsBuilder(Options);
+pub struct CompressionOptionsBuilder(CompressionOptions);
 
-impl OptionsBuilder {
+impl CompressionOptionsBuilder {
     #[must_use]
-    pub fn build(self) -> Options {
+    pub fn build(self) -> CompressionOptions {
         self.0
     }
 
     #[must_use]
-    pub fn compression_options(mut self, compression_codec: CompressionCodec) -> Self {
+    pub fn compression_codec(mut self, compression_codec: CompressionCodec) -> Self {
         self.0.compression_codec = compression_codec;
         self
     }
@@ -37,25 +39,16 @@ impl OptionsBuilder {
     }
 }
 
-impl Default for OptionsBuilder {
-    fn default() -> Self {
-        Self(Options {
-            version: Version::default(),
-            compression_codec: CompressionCodec::default(),
-        })
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct Options {
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CompressionOptions {
     version: Version,
     compression_codec: CompressionCodec,
 }
 
-impl Options {
+impl CompressionOptions {
     #[must_use]
-    pub fn builder() -> OptionsBuilder {
-        OptionsBuilder::new()
+    pub fn builder() -> CompressionOptionsBuilder {
+        CompressionOptionsBuilder::new()
     }
 
     #[must_use]
@@ -69,17 +62,79 @@ impl Options {
     }
 }
 
+#[derive(Debug, Default)]
+#[repr(transparent)]
+pub struct ReadOptionsBuilder(ReadOptions);
+
+impl ReadOptionsBuilder {
+    #[must_use]
+    pub fn build(self) -> ReadOptions {
+        self.0
+    }
+
+    #[must_use]
+    pub fn compression_codec(mut self, compression_codec: CompressionCodec) -> Self {
+        self.0.compression_options.compression_codec = compression_codec;
+        self
+    }
+
+    #[must_use]
+    pub fn compression_result(mut self, compression_result: CompressionResult) -> Self {
+        self.0.compression_result = compression_result;
+        self
+    }
+
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn version(mut self, version: Version) -> Self {
+        self.0.compression_options.version = version;
+        self
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ReadOptions {
+    compression_options: CompressionOptions,
+    compression_result: CompressionResult,
+}
+
+impl ReadOptions {
+    #[must_use]
+    pub fn builder() -> ReadOptionsBuilder {
+        ReadOptionsBuilder::new()
+    }
+
+    #[must_use]
+    pub fn compression_codec(&self) -> CompressionCodec {
+        self.compression_options.compression_codec
+    }
+
+    #[must_use]
+    pub fn compression_result(&self) -> CompressionResult {
+        self.compression_result
+    }
+
+    #[must_use]
+    pub fn version(&self) -> Version {
+        self.compression_options.version
+    }
+}
+
 #[derive(Default)]
 pub struct File<'bytes> {
     pub(crate) bytes: CompressableBytes<'bytes>,
 }
 
 type ReadResult<T> = T;
-derive::compressable_bytes!(File);
-derive::reader!(File => ReadResult);
+derive::compressable_bytes!(File: CompressionOptions);
+derive::reader_with_options!((File: ReadOptions) => ReadResult);
 
 impl<'bytes> File<'bytes> {
-    pub fn compress_into(&self, out: &mut Vec<u8>, options: &Options) -> Result<()> {
+    pub fn compress_into(&self, out: &mut Vec<u8>, options: &CompressionOptions) -> Result<()> {
         if self.is_compressed() {
             Err(Error::AlreadyCompressed)
         } else {
@@ -93,7 +148,7 @@ impl<'bytes> File<'bytes> {
         }
     }
 
-    pub fn decompress_into(&self, out: &mut Vec<u8>, options: &Options) -> Result<()> {
+    pub fn decompress_into(&self, out: &mut Vec<u8>, options: &CompressionOptions) -> Result<()> {
         let Some(decompressed_len) = self.decompressed_len() else {
             return Err(Error::AlreadyDecompressed);
         };
@@ -148,14 +203,16 @@ impl<'bytes> File<'bytes> {
         Ok(d.total_out().try_into()?)
     }
 
-    #[allow(clippy::unnecessary_wraps)]
-    fn do_read<In>(stream: &mut In) -> Result<ReadResult<Self>>
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    fn do_read<In>(stream: &mut In, options: &ReadOptions) -> Result<ReadResult<Self>>
     where
         In: ?::core::marker::Sized + crate::io::Source<'bytes>,
     {
-        Ok(Self::from_bytes(
-            stream.read_bytes_to_end().into_compressable(None),
-        ))
+        let decompressed = Self::from_bytes(stream.read_bytes_to_end().into_compressable(None));
+        match options.compression_result {
+            CompressionResult::Decompressed => Ok(decompressed),
+            CompressionResult::Compressed => decompressed.compress(&options.compression_options),
+        }
     }
 }
 

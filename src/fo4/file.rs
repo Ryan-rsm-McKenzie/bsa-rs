@@ -1,8 +1,12 @@
 use crate::{
     containers::CompressableBytes,
-    fo4::{Chunk, ChunkDX10, ChunkOptions, CompressionFormat, CompressionLevel, Format, Result},
-    io::{BorrowedSource, CopiedSource, MappedSource, Source},
-    Borrowed, Copied, Sealed,
+    derive,
+    fo4::{
+        Chunk, ChunkCompressionOptions, ChunkDX10, CompressionFormat, CompressionLevel, Error,
+        Format, Result,
+    },
+    io::Source,
+    CompressionResult, Sealed,
 };
 use core::{
     fmt::{self, Debug, Display, Formatter},
@@ -11,7 +15,7 @@ use core::{
     result, slice,
 };
 use directxtex::{ScratchImage, TexMetadata, CP_FLAGS, DDS_FLAGS, TEX_DIMENSION, TEX_MISC_FLAG};
-use std::{error, fs, io::Write, path::Path};
+use std::{error, io::Write};
 
 pub struct CapacityError<'bytes>(Chunk<'bytes>);
 
@@ -39,6 +43,7 @@ impl<'bytes> Display for CapacityError<'bytes> {
 
 impl<'bytes> error::Error for CapacityError<'bytes> {}
 
+#[derive(Debug, Default)]
 #[repr(transparent)]
 pub struct ReadOptionsBuilder(ReadOptions);
 
@@ -50,13 +55,19 @@ impl ReadOptionsBuilder {
 
     #[must_use]
     pub fn compression_format(mut self, compression_format: CompressionFormat) -> Self {
-        self.0.compression_format = compression_format;
+        self.0.compression_options.compression_format = compression_format;
         self
     }
 
     #[must_use]
     pub fn compression_level(mut self, compression_level: CompressionLevel) -> Self {
-        self.0.compression_level = compression_level;
+        self.0.compression_options.compression_level = compression_level;
+        self
+    }
+
+    #[must_use]
+    pub fn compression_result(mut self, compression_result: CompressionResult) -> Self {
+        self.0.compression_result = compression_result;
         self
     }
 
@@ -84,25 +95,13 @@ impl ReadOptionsBuilder {
     }
 }
 
-impl Default for ReadOptionsBuilder {
-    fn default() -> Self {
-        Self(ReadOptions {
-            format: Format::GNRL,
-            mip_chunk_width: 0,
-            mip_chunk_height: 0,
-            compression_format: CompressionFormat::Zip,
-            compression_level: CompressionLevel::FO4,
-        })
-    }
-}
-
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ReadOptions {
     format: Format,
     mip_chunk_width: usize,
     mip_chunk_height: usize,
-    compression_format: CompressionFormat,
-    compression_level: CompressionLevel,
+    compression_options: ChunkCompressionOptions,
+    compression_result: CompressionResult,
 }
 
 impl ReadOptions {
@@ -113,12 +112,17 @@ impl ReadOptions {
 
     #[must_use]
     pub fn compression_format(&self) -> CompressionFormat {
-        self.compression_format
+        self.compression_options.compression_format
     }
 
     #[must_use]
     pub fn compression_level(&self) -> CompressionLevel {
-        self.compression_level
+        self.compression_options.compression_level
+    }
+
+    #[must_use]
+    pub fn compression_result(&self) -> CompressionResult {
+        self.compression_result
     }
 
     #[must_use]
@@ -137,6 +141,7 @@ impl ReadOptions {
     }
 }
 
+#[derive(Debug, Default)]
 #[repr(transparent)]
 pub struct WriteOptionsBuilder(WriteOptions);
 
@@ -158,15 +163,7 @@ impl WriteOptionsBuilder {
     }
 }
 
-impl Default for WriteOptionsBuilder {
-    fn default() -> Self {
-        Self(WriteOptions {
-            compression_format: CompressionFormat::Zip,
-        })
-    }
-}
-
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct WriteOptions {
     compression_format: CompressionFormat,
 }
@@ -217,6 +214,9 @@ pub struct File<'bytes> {
 }
 
 impl<'bytes> Sealed for File<'bytes> {}
+
+type ReadResult<T> = T;
+derive::reader_with_options!((File: ReadOptions) => ReadResult);
 
 impl<'bytes> File<'bytes> {
     #[must_use]
@@ -392,10 +392,18 @@ impl<'bytes> File<'bytes> {
     where
         In: ?Sized + Source<'bytes>,
     {
-        match options.format {
+        let mut this = match options.format {
             Format::GNRL => Self::read_gnrl(stream),
             Format::DX10 => Self::read_dx10(stream, options),
+        }?;
+
+        if options.compression_result == CompressionResult::Compressed {
+            for chunk in &mut this {
+                *chunk = chunk.compress(&options.compression_options)?;
+            }
         }
+
+        Ok(this)
     }
 
     fn read_dx10<In>(stream: &In, options: &ReadOptions) -> Result<Self>
@@ -518,7 +526,7 @@ impl<'bytes> File<'bytes> {
         Out: ?Sized + Write,
     {
         let mut buf = Vec::new();
-        let options = ChunkOptions::builder()
+        let options = ChunkCompressionOptions::builder()
             .compression_format(options.compression_format)
             .build();
 
@@ -575,38 +583,6 @@ impl<'bytes, 'this> IntoIterator for &'this mut File<'bytes> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.chunks.iter_mut()
-    }
-}
-
-pub trait Reader<T>: Sealed + Sized {
-    fn read(source: T, options: &ReadOptions) -> Result<Self>;
-}
-
-impl<'bytes> Reader<Borrowed<'bytes>> for File<'bytes> {
-    fn read(source: Borrowed<'bytes>, options: &ReadOptions) -> Result<Self> {
-        let mut source = BorrowedSource::from(source.0);
-        Self::do_read(&mut source, options)
-    }
-}
-
-impl<'bytes> Reader<Copied<'bytes>> for File<'static> {
-    fn read(source: Copied<'bytes>, options: &ReadOptions) -> Result<Self> {
-        let mut source = CopiedSource::from(source.0);
-        Self::do_read(&mut source, options)
-    }
-}
-
-impl Reader<&fs::File> for File<'static> {
-    fn read(source: &fs::File, options: &ReadOptions) -> Result<Self> {
-        let mut source = MappedSource::try_from(source)?;
-        Self::do_read(&mut source, options)
-    }
-}
-
-impl Reader<&Path> for File<'static> {
-    fn read(source: &Path, options: &ReadOptions) -> Result<Self> {
-        let fd = fs::File::open(source)?;
-        Self::read(&fd, options)
     }
 }
 

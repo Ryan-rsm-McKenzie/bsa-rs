@@ -44,6 +44,59 @@ macro_rules! reader {
 
 pub(crate) use reader;
 
+macro_rules! reader_with_options {
+    (($this:ident: $options:ident) => $result:ident) => {
+        impl<'bytes> crate::ReaderWithOptions<crate::Borrowed<'bytes>> for $this<'bytes> {
+            type Error = Error;
+            type Item = $result<$this<'bytes>>;
+            type Options = $options;
+
+            fn read(
+                source: crate::Borrowed<'bytes>,
+                options: &Self::Options,
+            ) -> Result<Self::Item> {
+                let mut source = crate::io::BorrowedSource::from(source.0);
+                Self::do_read(&mut source, options)
+            }
+        }
+
+        impl<'bytes> crate::ReaderWithOptions<crate::Copied<'bytes>> for $this<'static> {
+            type Error = Error;
+            type Item = $result<$this<'static>>;
+            type Options = $options;
+
+            fn read(source: crate::Copied<'bytes>, options: &Self::Options) -> Result<Self::Item> {
+                let mut source = crate::io::CopiedSource::from(source.0);
+                Self::do_read(&mut source, options)
+            }
+        }
+
+        impl crate::ReaderWithOptions<&::std::fs::File> for $this<'static> {
+            type Error = Error;
+            type Item = $result<$this<'static>>;
+            type Options = $options;
+
+            fn read(source: &::std::fs::File, options: &Self::Options) -> Result<Self::Item> {
+                let mut source = crate::io::MappedSource::try_from(source)?;
+                Self::do_read(&mut source, options)
+            }
+        }
+
+        impl crate::ReaderWithOptions<&::std::path::Path> for $this<'static> {
+            type Error = Error;
+            type Item = $result<$this<'static>>;
+            type Options = $options;
+
+            fn read(source: &::std::path::Path, options: &Self::Options) -> Result<Self::Item> {
+                let fd = ::std::fs::File::open(source)?;
+                Self::read(&fd, options)
+            }
+        }
+    };
+}
+
+pub(crate) use reader_with_options;
+
 macro_rules! bytes {
     ($this:ident) => {
         impl<'bytes> crate::Sealed for $this<'bytes> {}
@@ -89,11 +142,11 @@ macro_rules! bytes {
 pub(crate) use bytes;
 
 macro_rules! compressable_bytes {
-    ($this:ident) => {
+    ($this:ident: $options:ident) => {
         crate::derive::bytes!($this);
 
         impl<'bytes> $this<'bytes> {
-            pub fn compress(&self, options: &Options) -> Result<$this<'static>> {
+            pub fn compress(&self, options: &$options) -> Result<$this<'static>> {
                 let mut bytes = ::std::vec::Vec::new();
                 self.compress_into(&mut bytes, options)?;
                 bytes.shrink_to_fit();
@@ -103,7 +156,7 @@ macro_rules! compressable_bytes {
                 )))
             }
 
-            pub fn decompress(&self, options: &Options) -> Result<$this<'static>> {
+            pub fn decompress(&self, options: &$options) -> Result<$this<'static>> {
                 let mut bytes = ::std::vec::Vec::new();
                 self.decompress_into(&mut bytes, options)?;
                 bytes.shrink_to_fit();
@@ -125,7 +178,7 @@ macro_rules! compressable_bytes {
                 !self.is_compressed()
             }
 
-            pub fn write<Out>(&self, stream: &mut Out, options: &Options) -> Result<()>
+            pub fn write<Out>(&self, stream: &mut Out, options: &$options) -> Result<()>
             where
                 Out: ?::core::marker::Sized + ::std::io::Write,
             {
