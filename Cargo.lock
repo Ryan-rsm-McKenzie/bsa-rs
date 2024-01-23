@@ -16,9 +16,9 @@ checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 
 [[package]]
 name = "bitflags"
-version = "2.4.1"
+version = "2.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "327762f6e5a765692301e5bb513e0d9fef63be86bbc14528052b1cd3e6f03e07"
+checksum = "ed570934406eb16438a4e976b1b4500774099c13b8cb96eec99f620f05090ddf"
 
 [[package]]
 name = "bsa"
@@ -27,6 +27,7 @@ dependencies = [
  "anyhow",
  "bitflags",
  "bstr",
+ "directxtex",
  "flate2",
  "lzzzz",
  "memmap2",
@@ -68,6 +69,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b540bd8bc810d3885c6ea91e2018302f68baba2129ab3e88f32389ee9370880d"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "directxtex"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "410c427e5599ba8e0e94ac2d69bc81baaa2405191fe1b14e6b31437084376227"
+dependencies = [
+ "bitflags",
+ "cc",
 ]
 
 [[package]]

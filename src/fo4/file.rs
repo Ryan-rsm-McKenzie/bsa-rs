@@ -1,10 +1,17 @@
-use crate::fo4::{Chunk, CompressionFormat, CompressionLevel, Format};
+use crate::{
+    containers::CompressableBytes,
+    fo4::{Chunk, ChunkExtra, CompressionFormat, CompressionLevel, Format, Result},
+    io::{BorrowedSource, CopiedSource, MappedSource, Source},
+    Borrowed, Copied, Sealed,
+};
 use core::{
     fmt::{self, Debug, Display, Formatter},
-    ops::RangeBounds,
-    result,
+    ops::{Range, RangeBounds},
+    ptr::NonNull,
+    result, slice,
 };
-use std::error;
+use directxtex::{Image, ScratchImage, CP_FLAGS, DDS_FLAGS};
+use std::{error, fs, path::Path};
 
 pub struct CapacityError<'bytes>(Chunk<'bytes>);
 
@@ -189,10 +196,29 @@ impl WriteOptions {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
+#[non_exhaustive]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub enum Header {
+    #[default]
+    GNRL,
+    DX10 {
+        height: u16,
+        width: u16,
+        mip_count: u8,
+        format: u8,
+        flags: u8,
+        tile_mode: u8,
+    },
+}
+
 #[derive(Default)]
 pub struct File<'bytes> {
     pub(crate) chunks: Vec<Chunk<'bytes>>,
+    pub header: Header,
 }
+
+impl<'bytes> Sealed for File<'bytes> {}
 
 impl<'bytes> File<'bytes> {
     #[must_use]
@@ -350,6 +376,150 @@ impl<'bytes> File<'bytes> {
             2 => self.chunks.reserve_exact(2),
             _ => unreachable!(),
         }
+    }
+
+    fn do_read<In>(stream: &mut In, options: &ReadOptions) -> Result<Self>
+    where
+        In: ?Sized + Source<'bytes>,
+    {
+        match options.format {
+            Format::GNRL => Self::read_gnrl(stream),
+            Format::DX10 => Self::read_dx10(stream, options),
+        }
+    }
+
+    fn read_dx10<In>(stream: &mut In, options: &ReadOptions) -> Result<Self>
+    where
+        In: ?Sized + Source<'bytes>,
+    {
+        let scratch =
+            ScratchImage::load_dds(stream.as_bytes(), DDS_FLAGS::DDS_FLAGS_NONE, None, None)?;
+        let meta = scratch.metadata();
+        let is_cubemap = meta.is_cubemap();
+        let header = Header::DX10 {
+            height: meta.height.try_into()?,
+            width: meta.width.try_into()?,
+            mip_count: meta.mip_levels.try_into()?,
+            format: meta.format.bits().try_into()?,
+            flags: if is_cubemap { 1 } else { 0 },
+            tile_mode: 8,
+        };
+
+        let images = scratch.images();
+        let chunk_from_mips = |range: Range<usize>| -> Result<Chunk> {
+            let mips = range.start.try_into()?..range.end.try_into()?;
+            let mut bytes = Vec::new();
+            for image in &images[range] {
+                let ptr = NonNull::new(image.pixels).unwrap_or(NonNull::dangling());
+                let pixels = unsafe { slice::from_raw_parts(ptr.as_ptr(), image.slice_pitch) };
+                bytes.extend_from_slice(pixels);
+            }
+            Ok(Chunk {
+                // dxtex always allocates internally, so we have to copy bytes and use from_owned here
+                bytes: CompressableBytes::from_owned(bytes, None),
+                extra: ChunkExtra::DX10 { mips },
+            })
+        };
+
+        let chunks = if images.is_empty() {
+            Vec::new()
+        } else if is_cubemap {
+            // don't chunk cubemaps
+            let chunk = chunk_from_mips(0..images.len())?;
+            [chunk].into_iter().collect()
+        } else {
+            let pitch = meta.format.compute_pitch(
+                options.mip_chunk_width,
+                options.mip_chunk_height,
+                CP_FLAGS::CP_FLAGS_NONE,
+            )?;
+
+            let mut v = Vec::with_capacity(4);
+            let mut size = 0;
+            let mut start = 0;
+            let mut stop = 0;
+            loop {
+                let image = &images[stop];
+                if size == 0 || size + image.slice_pitch < pitch.slice {
+                    size += image.slice_pitch;
+                } else {
+                    let chunk = chunk_from_mips(start..stop)?;
+                    v.push(chunk);
+                    start = stop;
+                    size = image.slice_pitch;
+                }
+
+                stop += 1;
+                if stop == images.len() || v.len() == 3 {
+                    break;
+                }
+            }
+
+            if stop < images.len() {
+                let chunk = chunk_from_mips(stop..images.len())?;
+                v.push(chunk);
+            }
+
+            debug_assert!(v.len() <= 4);
+            v
+        };
+
+        Ok(Self { chunks, header })
+    }
+
+    fn read_gnrl<In>(stream: &mut In) -> Result<Self>
+    where
+        In: ?Sized + Source<'bytes>,
+    {
+        let bytes = stream.read_bytes_to_end().into_compressable(None);
+        let chunk = Chunk::from_bytes(bytes);
+        Ok([chunk].into_iter().collect())
+    }
+}
+
+impl<'bytes> FromIterator<Chunk<'bytes>> for File<'bytes> {
+    fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = Chunk<'bytes>>,
+    {
+        let chunks: Vec<_> = iter.into_iter().collect();
+        assert!(chunks.len() <= 4);
+        Self {
+            chunks,
+            header: Header::default(),
+        }
+    }
+}
+
+pub trait Reader<T>: Sealed + Sized {
+    fn read(source: T, options: &ReadOptions) -> Result<Self>;
+}
+
+impl<'bytes> Reader<Borrowed<'bytes>> for File<'bytes> {
+    fn read(source: Borrowed<'bytes>, options: &ReadOptions) -> Result<Self> {
+        let mut source = BorrowedSource::from(source.0);
+        Self::do_read(&mut source, options)
+    }
+}
+
+impl<'bytes> Reader<Copied<'bytes>> for File<'static> {
+    fn read(source: Copied<'bytes>, options: &ReadOptions) -> Result<Self> {
+        let mut source = CopiedSource::from(source.0);
+        Self::do_read(&mut source, options)
+    }
+}
+
+impl Reader<&fs::File> for File<'static> {
+    fn read(source: &fs::File, options: &ReadOptions) -> Result<Self> {
+        let mut source = MappedSource::try_from(source)?;
+        Self::do_read(&mut source, options)
+    }
+}
+
+impl Reader<&Path> for File<'static> {
+    fn read(source: &Path, options: &ReadOptions) -> Result<Self> {
+        let fd = fs::File::open(source)?;
+        Self::read(&fd, options)
     }
 }
 

@@ -3,16 +3,20 @@ mod file;
 mod hashing;
 
 pub use self::{
-    chunk::{Chunk, Options as ChunkOptions, OptionsBuilder as ChunkOptionsBuilder},
+    chunk::{
+        Chunk, Extra as ChunkExtra, Options as ChunkOptions, OptionsBuilder as ChunkOptionsBuilder,
+    },
     file::{
-        CapacityError as FileCapacityError, File, ReadOptions as FileReadOptions,
-        ReadOptionsBuilder as FileReadOptionsBuilder, WriteOptions as FileWriteOptions,
+        CapacityError as FileCapacityError, File, Header as FileHeader,
+        ReadOptions as FileReadOptions, ReadOptionsBuilder as FileReadOptionsBuilder,
+        Reader as FileReader, WriteOptions as FileWriteOptions,
         WriteOptionsBuilder as FileWriteOptionsBuilder,
     },
     hashing::{hash_file, hash_file_in_place, FileHash, Hash},
 };
 
 use core::num::TryFromIntError;
+use directxtex::HResultError;
 use std::io;
 
 #[non_exhaustive]
@@ -26,6 +30,9 @@ pub enum Error {
 
     #[error("buffer failed to decompress to the expected size... expected {expected} bytes, but got {actual} bytes")]
     DecompressionSizeMismatch { expected: usize, actual: usize },
+
+    #[error("error while working with a dds file")]
+    DX10(#[from] HResultError),
 
     #[error("an operation on an integer would have truncated and corrupted data")]
     IntegralTruncation,

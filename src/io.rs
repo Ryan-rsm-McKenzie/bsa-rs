@@ -15,6 +15,8 @@ pub(crate) enum Endian {
 }
 
 pub(crate) trait Source<'bytes> {
+    fn as_bytes(&self) -> &[u8];
+
     fn read_bytes(&mut self, len: usize) -> io::Result<Bytes<'bytes>>;
 
     #[must_use]
@@ -63,6 +65,10 @@ pub(crate) trait Source<'bytes> {
 macro_rules! make_sourceable {
     ($this:ty, $bytes_lifetime:lifetime $(,$this_lifetime:lifetime)?) => {
         impl $(<$this_lifetime>)? Source<$bytes_lifetime> for $this {
+			fn as_bytes(&self) -> &[u8] {
+				&self.source[..]
+			}
+
             fn read_into(&mut self, buf: &mut [u8]) -> io::Result<()> {
                 let len = buf.len();
                 let start = self.pos;

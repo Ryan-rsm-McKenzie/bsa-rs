@@ -131,7 +131,7 @@ impl<'bytes> Chunk<'bytes> {
         }
     }
 
-    fn from_bytes(bytes: CompressableBytes<'_>) -> Chunk<'_> {
+    pub(crate) fn from_bytes(bytes: CompressableBytes<'_>) -> Chunk<'_> {
         Chunk {
             bytes,
             extra: Extra::default(),

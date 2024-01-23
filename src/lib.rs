@@ -43,5 +43,5 @@ pub trait CompressableFrom<T>: Sealed {
 pub use bstr::{BStr, BString};
 
 pub mod prelude {
-    pub use crate::{CompressableFrom as _, Reader as _};
+    pub use crate::{fo4::FileReader as _, CompressableFrom as _, Reader as _};
 }
