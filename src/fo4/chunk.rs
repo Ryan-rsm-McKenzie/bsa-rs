@@ -70,15 +70,24 @@ impl Options {
     }
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct DX10 {
+    pub mips: Range<u16>,
+}
+
 #[allow(clippy::upper_case_acronyms)]
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum Extra {
     #[default]
     GNRL,
-    DX10 {
-        mips: Range<u16>,
-    },
+    DX10(DX10),
+}
+
+impl From<DX10> for Extra {
+    fn from(value: DX10) -> Self {
+        Self::DX10(value)
+    }
 }
 
 #[derive(Default)]

@@ -5,12 +5,13 @@ mod hashing;
 pub use self::{
     chunk::{
         Chunk, Extra as ChunkExtra, Options as ChunkOptions, OptionsBuilder as ChunkOptionsBuilder,
+        DX10 as ChunkDX10,
     },
     file::{
         CapacityError as FileCapacityError, File, Header as FileHeader,
         ReadOptions as FileReadOptions, ReadOptionsBuilder as FileReadOptionsBuilder,
         Reader as FileReader, WriteOptions as FileWriteOptions,
-        WriteOptionsBuilder as FileWriteOptionsBuilder,
+        WriteOptionsBuilder as FileWriteOptionsBuilder, DX10 as FileDX10,
     },
     hashing::{hash_file, hash_file_in_place, FileHash, Hash},
 };
