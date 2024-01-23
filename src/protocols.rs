@@ -38,7 +38,7 @@ impl BinaryReadable for BString {
 impl BinaryWriteable for BString {
     type Item = ByteStr;
 
-    fn to_stream<Out>(stream: &mut Sink<'_, Out>, item: &Self::Item, _: Endian) -> io::Result<()>
+    fn to_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item, _: Endian) -> io::Result<()>
     where
         Out: Write,
     {
@@ -80,7 +80,7 @@ impl BinaryReadable for ZString {
 impl BinaryWriteable for ZString {
     type Item = ByteStr;
 
-    fn to_stream<Out>(stream: &mut Sink<'_, Out>, item: &Self::Item, _: Endian) -> io::Result<()>
+    fn to_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item, _: Endian) -> io::Result<()>
     where
         Out: Write,
     {
@@ -120,7 +120,7 @@ impl BinaryReadable for BZString {
 impl BinaryWriteable for BZString {
     type Item = ByteStr;
 
-    fn to_stream<Out>(stream: &mut Sink<'_, Out>, item: &Self::Item, _: Endian) -> io::Result<()>
+    fn to_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item, _: Endian) -> io::Result<()>
     where
         Out: Write,
     {
@@ -158,11 +158,7 @@ impl BinaryReadable for WString {
 impl BinaryWriteable for WString {
     type Item = ByteStr;
 
-    fn to_stream<Out>(
-        stream: &mut Sink<'_, Out>,
-        item: &Self::Item,
-        endian: Endian,
-    ) -> io::Result<()>
+    fn to_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item, endian: Endian) -> io::Result<()>
     where
         Out: Write,
     {
