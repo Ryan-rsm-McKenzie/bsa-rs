@@ -55,7 +55,7 @@ pub trait ReaderWithOptions<T>: Sealed {
     fn read(source: T, options: &Self::Options) -> core::result::Result<Self::Item, Self::Error>;
 }
 
-pub use bstr::{BStr, BString};
+pub use bstr::{BStr, BString, ByteSlice, ByteVec};
 
 pub mod prelude {
     pub use crate::{CompressableFrom as _, Reader as _, ReaderWithOptions as _};
