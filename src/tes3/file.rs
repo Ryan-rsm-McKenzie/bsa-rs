@@ -6,7 +6,7 @@ use crate::{
 };
 use std::io::Write;
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct File<'bytes> {
     pub(crate) bytes: Bytes<'bytes>,
 }

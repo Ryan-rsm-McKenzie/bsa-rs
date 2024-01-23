@@ -82,7 +82,7 @@ impl From<DX10> for Extra {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Chunk<'bytes> {
     pub(crate) bytes: CompressableBytes<'bytes>,
     pub extra: Extra,

@@ -276,7 +276,7 @@ macro_rules! mapping {
 
         impl<'bytes> crate::Sealed for $this<'bytes> {}
 
-        #[derive(::core::default::Default)]
+        #[derive(::core::clone::Clone, ::core::fmt::Debug, ::core::default::Default)]
         pub struct $this<'bytes> {
             pub(crate) map: $mapping<'bytes>,
         }

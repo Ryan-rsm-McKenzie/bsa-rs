@@ -1,6 +1,7 @@
 use memmap2::Mmap;
 use std::sync::Arc;
 
+#[derive(Clone, Debug)]
 struct Mapping {
     pos: usize,
     len: usize,
@@ -29,6 +30,7 @@ impl Mapping {
     }
 }
 
+#[derive(Clone, Debug)]
 enum BytesInner<'bytes> {
     Owned(Vec<u8>),
     Borrowed(&'bytes [u8]),
@@ -37,6 +39,7 @@ enum BytesInner<'bytes> {
 
 use BytesInner::*;
 
+#[derive(Clone, Debug)]
 pub(crate) struct Bytes<'bytes> {
     inner: BytesInner<'bytes>,
 }
@@ -138,6 +141,7 @@ impl<'bytes> Default for Bytes<'bytes> {
     }
 }
 
+#[derive(Clone, Debug)]
 enum CompressableBytesInner<'bytes> {
     OwnedDecompressed(Vec<u8>),
     OwnedCompressed(Vec<u8>, usize),
@@ -149,6 +153,7 @@ enum CompressableBytesInner<'bytes> {
 
 use CompressableBytesInner::*;
 
+#[derive(Clone, Debug)]
 pub(crate) struct CompressableBytes<'bytes> {
     inner: CompressableBytesInner<'bytes>,
 }

@@ -124,7 +124,7 @@ impl ReadOptions {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct File<'bytes> {
     pub(crate) bytes: CompressableBytes<'bytes>,
 }

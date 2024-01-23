@@ -207,7 +207,7 @@ impl From<DX10> for Header {
 
 type Container<'bytes> = Vec<Chunk<'bytes>>;
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct File<'bytes> {
     pub(crate) chunks: Container<'bytes>,
     pub header: Header,
