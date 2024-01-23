@@ -48,7 +48,7 @@ macro_rules! bytes {
     ($this:ident => $result:ident) => {
         crate::derive::reader!($this => $result);
 
-		impl<'bytes> crate::Sealed for $this<'bytes> {}
+        impl<'bytes> crate::Sealed for $this<'bytes> {}
 
         impl<'bytes> $this<'bytes> {
             #[must_use]
@@ -63,10 +63,10 @@ macro_rules! bytes {
 
             #[must_use]
             pub fn into_owned(self) -> $this<'static> {
-				#[allow(clippy::needless_update)]
+                #[allow(clippy::needless_update)]
                 $this {
                     bytes: self.bytes.into_owned(),
-					..self
+                    ..self
                 }
             }
 
@@ -94,89 +94,89 @@ macro_rules! compressable_bytes {
     ($this:ident => $result:ident) => {
         crate::derive::bytes!($this => $result);
 
-		impl<'bytes> $this<'bytes> {
-			pub fn compress(&self, options: &Options) -> Result<$this<'static>> {
-				let mut bytes = ::std::vec::Vec::new();
-				self.compress_into(&mut bytes, options)?;
-				bytes.shrink_to_fit();
-				Ok(Self::from_bytes(CompressableBytes::from_owned(bytes, Some(self.len()))))
-			}
+        impl<'bytes> $this<'bytes> {
+            pub fn compress(&self, options: &Options) -> Result<$this<'static>> {
+                let mut bytes = ::std::vec::Vec::new();
+                self.compress_into(&mut bytes, options)?;
+                bytes.shrink_to_fit();
+                Ok(Self::from_bytes(CompressableBytes::from_owned(bytes, Some(self.len()))))
+            }
 
-			pub fn decompress(&self, options: &Options) -> Result<$this<'static>> {
-				let mut bytes = ::std::vec::Vec::new();
-				self.decompress_into(&mut bytes, options)?;
-				bytes.shrink_to_fit();
-				Ok(Self::from_bytes(CompressableBytes::from_owned(bytes, None)))
-			}
+            pub fn decompress(&self, options: &Options) -> Result<$this<'static>> {
+                let mut bytes = ::std::vec::Vec::new();
+                self.decompress_into(&mut bytes, options)?;
+                bytes.shrink_to_fit();
+                Ok(Self::from_bytes(CompressableBytes::from_owned(bytes, None)))
+            }
 
-			#[must_use]
-			pub fn decompressed_len(&self) -> ::core::option::Option<usize> {
-				self.bytes.decompressed_len()
-			}
+            #[must_use]
+            pub fn decompressed_len(&self) -> ::core::option::Option<usize> {
+                self.bytes.decompressed_len()
+            }
 
-			#[must_use]
-			pub fn is_compressed(&self) -> bool {
-				self.bytes.is_compressed()
-			}
+            #[must_use]
+            pub fn is_compressed(&self) -> bool {
+                self.bytes.is_compressed()
+            }
 
-			#[must_use]
-			pub fn is_decompressed(&self) -> bool {
-				!self.is_compressed()
-			}
+            #[must_use]
+            pub fn is_decompressed(&self) -> bool {
+                !self.is_compressed()
+            }
 
-			pub fn write<Out>(&self, stream: &mut Out, options: &Options) -> Result<()>
-			where
-				Out: ?::core::marker::Sized + ::std::io::Write,
-			{
-				if self.is_compressed() {
-					let mut bytes = ::std::vec::Vec::new();
-					self.decompress_into(&mut bytes, options)?;
-					stream.write_all(&bytes)?;
-				} else {
-					stream.write_all(self.as_bytes())?;
-				}
+            pub fn write<Out>(&self, stream: &mut Out, options: &Options) -> Result<()>
+            where
+                Out: ?::core::marker::Sized + ::std::io::Write,
+            {
+                if self.is_compressed() {
+                    let mut bytes = ::std::vec::Vec::new();
+                    self.decompress_into(&mut bytes, options)?;
+                    stream.write_all(&bytes)?;
+                } else {
+                    stream.write_all(self.as_bytes())?;
+                }
 
-				Ok(())
-			}
+                Ok(())
+            }
 
-			#[allow(clippy::unnecessary_wraps)]
-			fn do_read<In>(stream: &mut In) -> Result<$result<Self>>
-			where
-				In: ?::core::marker::Sized + crate::io::Source<'bytes>,
-			{
-				Ok(Self::from_bytes(
-					stream.read_bytes_to_end().into_compressable(None),
-				))
-			}
-		}
+            #[allow(clippy::unnecessary_wraps)]
+            fn do_read<In>(stream: &mut In) -> Result<$result<Self>>
+            where
+                In: ?::core::marker::Sized + crate::io::Source<'bytes>,
+            {
+                Ok(Self::from_bytes(
+                    stream.read_bytes_to_end().into_compressable(None),
+                ))
+            }
+        }
 
-		impl<'bytes> crate::CompressableFrom<&'bytes [u8]> for $this<'bytes> {
-			fn from_compressed(value: &'bytes [u8], decompressed_len: usize) -> Self {
-				Self::from_bytes(
-					CompressableBytes::from_borrowed(value, Some(decompressed_len)),
-				)
-			}
+        impl<'bytes> crate::CompressableFrom<&'bytes [u8]> for $this<'bytes> {
+            fn from_compressed(value: &'bytes [u8], decompressed_len: usize) -> Self {
+                Self::from_bytes(
+                    CompressableBytes::from_borrowed(value, Some(decompressed_len)),
+                )
+            }
 
-			fn from_decompressed(value: &'bytes [u8]) -> Self {
-				Self::from_bytes(
-					CompressableBytes::from_borrowed(value, None),
-				)
-			}
-		}
+            fn from_decompressed(value: &'bytes [u8]) -> Self {
+                Self::from_bytes(
+                    CompressableBytes::from_borrowed(value, None),
+                )
+            }
+        }
 
-		impl crate::CompressableFrom<::std::vec::Vec<u8>> for $this<'static> {
-			fn from_compressed(value: ::std::vec::Vec<u8>, decompressed_len: usize) -> Self {
-				Self::from_bytes(
-					CompressableBytes::from_owned(value, Some(decompressed_len)),
-				)
-			}
+        impl crate::CompressableFrom<::std::vec::Vec<u8>> for $this<'static> {
+            fn from_compressed(value: ::std::vec::Vec<u8>, decompressed_len: usize) -> Self {
+                Self::from_bytes(
+                    CompressableBytes::from_owned(value, Some(decompressed_len)),
+                )
+            }
 
-			fn from_decompressed(value: ::std::vec::Vec<u8>) -> Self {
-				Self::from_bytes(
-					CompressableBytes::from_owned(value, None),
-				)
-			}
-		}
+            fn from_decompressed(value: ::std::vec::Vec<u8>) -> Self {
+                Self::from_bytes(
+                    CompressableBytes::from_owned(value, None),
+                )
+            }
+        }
     };
 }
 
@@ -385,10 +385,10 @@ macro_rules! mapping {
 pub(crate) use mapping;
 
 macro_rules! archive {
-	($this:ident => $result:ident, $mapping:ident: ($key:ident: $hash:ident) => $value:ident) => {
-		crate::derive::mapping!($this, $mapping: ($key: $hash) => $value);
-		crate::derive::reader!($this => $result);
-	};
+    ($this:ident => $result:ident, $mapping:ident: ($key:ident: $hash:ident) => $value:ident) => {
+        crate::derive::mapping!($this, $mapping: ($key: $hash) => $value);
+        crate::derive::reader!($this => $result);
+    };
 }
 
 pub(crate) use archive;
