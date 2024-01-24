@@ -14,11 +14,14 @@ mod cc;
 mod containers;
 mod derive;
 pub mod fo4;
+mod guess;
 mod hashing;
 mod io;
 mod protocols;
 pub mod tes3;
 pub mod tes4;
+
+pub use guess::{guess_format, FileFormat};
 
 pub struct Borrowed<'borrow>(pub &'borrow [u8]);
 
