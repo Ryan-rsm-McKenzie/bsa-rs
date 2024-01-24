@@ -434,7 +434,7 @@ impl<'bytes> File<'bytes> {
 
         let images = scratch.images();
         let chunk_from_mips = |range: Range<usize>| -> Result<Chunk> {
-            let mips = range.start.try_into()?..range.end.try_into()?;
+            let mips = range.start.try_into()?..=(range.end - 1).try_into()?;
             let mut bytes = Vec::new();
             for image in &images[range] {
                 let ptr = NonNull::new(image.pixels).unwrap_or(NonNull::dangling());

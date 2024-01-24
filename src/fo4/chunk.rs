@@ -3,7 +3,7 @@ use crate::{
     derive,
     fo4::{CompressionFormat, CompressionLevel, Error, Result},
 };
-use core::ops::Range;
+use core::ops::RangeInclusive;
 use flate2::{
     write::{ZlibDecoder, ZlibEncoder},
     Compress, Compression,
@@ -62,9 +62,15 @@ impl CompressionOptions {
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DX10 {
-    pub mips: Range<u16>,
+    pub mips: RangeInclusive<u16>,
+}
+
+impl Default for DX10 {
+    fn default() -> Self {
+        Self { mips: 0..=0 }
+    }
 }
 
 #[allow(clippy::upper_case_acronyms)]

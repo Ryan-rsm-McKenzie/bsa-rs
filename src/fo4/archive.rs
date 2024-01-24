@@ -235,7 +235,7 @@ impl<'bytes> Archive<'bytes> {
         match (header.format, &chunk.extra) {
             (Format::GNRL, ChunkExtra::GNRL) => (),
             (Format::DX10, ChunkExtra::DX10(x)) => {
-                sink.write(&(x.mips.start, x.mips.end), Endian::Little)?;
+                sink.write(&(*x.mips.start(), *x.mips.end()), Endian::Little)?;
             }
             _ => {
                 return Err(Error::FormatMismatch);
@@ -369,7 +369,7 @@ impl<'bytes> Archive<'bytes> {
             Format::DX10 => {
                 let (mip_first, mip_last) = source.read(Endian::Little)?;
                 ChunkDX10 {
-                    mips: mip_first..mip_last,
+                    mips: mip_first..=mip_last,
                 }
                 .into()
             }
