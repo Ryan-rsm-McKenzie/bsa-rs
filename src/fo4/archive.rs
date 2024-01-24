@@ -534,6 +534,7 @@ mod tests {
     };
     use anyhow::Context as _;
     use bstr::ByteSlice as _;
+    use core::mem;
     use directxtex::DXGI_FORMAT;
     use memmap2::Mmap;
     use std::{
@@ -751,6 +752,182 @@ mod tests {
 
         assert_eq!(original.len(), copy.len());
         assert_eq!(&original[..], copy);
+        Ok(())
+    }
+
+    #[allow(non_camel_case_types, non_snake_case)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct DDS_PIXELFORMAT {
+        dwSize: u32,
+        dwFlags: u32,
+        dwFourCC: u32,
+        dwRGBBitCount: u32,
+        dwRBitMask: u32,
+        dwGBitMask: u32,
+        dwBBitMask: u32,
+        dwABitMask: u32,
+    }
+
+    #[allow(non_camel_case_types, non_snake_case)]
+    #[derive(Clone, Copy, Debug)]
+    struct DDS_HEADER {
+        dwSize: u32,
+        dwFlags: u32,
+        dwHeight: u32,
+        dwWidth: u32,
+        dwPitchOrLinearSize: u32,
+        dwDepth: u32,
+        dwMipMapCount: u32,
+        #[allow(unused)]
+        dwReserved1: [u32; 11],
+        ddspf: DDS_PIXELFORMAT,
+        dwCaps: u32,
+        dwCaps2: u32,
+        dwCaps3: u32,
+        dwCaps4: u32,
+        #[allow(unused)]
+        dwReserved2: u32,
+    }
+
+    impl Eq for DDS_HEADER {}
+
+    impl PartialEq for DDS_HEADER {
+        fn eq(&self, other: &Self) -> bool {
+            macro_rules! compare {
+                ($name:ident) => {
+                    self.$name == other.$name
+                };
+            }
+
+            compare!(dwSize)
+                && compare!(dwFlags)
+                && compare!(dwHeight)
+                && compare!(dwWidth)
+                && compare!(dwPitchOrLinearSize)
+                && compare!(dwDepth)
+                && compare!(dwMipMapCount)
+                && compare!(ddspf)
+                && compare!(dwCaps)
+                && compare!(dwCaps2)
+                && compare!(dwCaps3)
+                && compare!(dwCaps4)
+        }
+    }
+
+    #[allow(non_camel_case_types, non_snake_case)]
+    #[derive(Clone, Copy, Debug)]
+    struct DDS_HEADER_DXT10 {
+        dxgiFormat: DXGI_FORMAT,
+        resourceDimension: u32,
+        miscFlag: u32,
+        arraySize: u32,
+        #[allow(unused)]
+        miscFlags2: u32,
+    }
+
+    impl Eq for DDS_HEADER_DXT10 {}
+
+    impl PartialEq for DDS_HEADER_DXT10 {
+        fn eq(&self, other: &Self) -> bool {
+            macro_rules! compare {
+                ($name:ident) => {
+                    self.$name == other.$name
+                };
+            }
+
+            compare!(dxgiFormat)
+                && compare!(resourceDimension)
+                && compare!(miscFlag)
+                && compare!(arraySize)
+        }
+    }
+
+    #[allow(non_snake_case)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct DDS9Header {
+        dwMagic: u32,
+        header: DDS_HEADER,
+    }
+
+    #[allow(non_snake_case)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct DDS10Header {
+        header9: DDS9Header,
+        header10: DDS_HEADER_DXT10,
+    }
+
+    #[test]
+    fn pack_unpack_texture_archives() -> anyhow::Result<()> {
+        let root = Path::new("data/fo4_dds_test");
+        let original = {
+            let fd = fs::File::open(root.join("in.ba2")).context("failed to open archive")?;
+            unsafe { Mmap::map(&fd) }.context("failed to map archive")?
+        };
+
+        let (archive, options) =
+            Archive::read(Borrowed(&original[..])).context("failed to read archive")?;
+        assert_eq!(options.format(), Format::DX10);
+        assert_eq!(options.compression_format(), CompressionFormat::Zip);
+
+        {
+            let file_name = "Fence006_1K_Roughness.dds";
+            let original = {
+                let fd = fs::File::open(root.join(file_name)).context("failed to open file")?;
+                unsafe { Mmap::map(&fd) }.context("failed to map file")?
+            };
+            let file = {
+                let from_archive = archive
+                    .get(&ArchiveKey::from(file_name))
+                    .context("failed to get file from archive")?;
+                assert!(!from_archive.is_empty());
+                for chunk in from_archive {
+                    assert!(chunk.is_decompressed());
+                }
+
+                let options = FileReadOptions::builder().format(Format::DX10).build();
+                let from_disk =
+                    File::read(Borrowed(&original), &options).context("failed to read file")?;
+                assert_eq!(from_disk.header, from_archive.header);
+                assert_eq!(from_disk.len(), from_archive.len());
+                for (disk, archived) in from_disk.iter().zip(from_archive) {
+                    assert_eq!(disk.extra, archived.extra);
+                    assert_eq!(disk.as_bytes(), archived.as_bytes());
+                }
+
+                from_archive
+            };
+            let copy = {
+                let mut v = Vec::new();
+                file.write(&mut v, &Default::default())
+                    .context("failed to write file")?;
+                v
+            };
+            assert_eq!(original.len(), copy.len());
+
+            let header_size = mem::size_of::<DDS10Header>();
+            let get_header = |bytes: &[u8]| unsafe {
+                bytes[..header_size]
+                    .as_ptr()
+                    .cast::<DDS10Header>()
+                    .read_unaligned()
+            };
+            let original_header = get_header(&original[..]);
+            let copy_header = get_header(&copy);
+            assert_eq!(original_header, copy_header);
+            assert_eq!(&original[header_size..], &copy[header_size..]);
+        }
+
+        let copy = {
+            let mut v = Vec::new();
+            archive
+                .write(&mut v, &options)
+                .context("failed to write archive")?;
+            v
+        };
+
+        assert_eq!(original.len(), copy.len());
+        assert_eq!(&original[..], &copy);
+
         Ok(())
     }
 
