@@ -10,7 +10,7 @@ use crate::{
 };
 use core::{
     fmt::{self, Debug, Display, Formatter},
-    ops::{Range, RangeBounds},
+    ops::{Index, IndexMut, Range, RangeBounds},
     ptr::NonNull,
     result, slice,
 };
@@ -550,6 +550,20 @@ impl<'bytes> File<'bytes> {
         }
 
         Ok(())
+    }
+}
+
+impl<'bytes> Index<usize> for File<'bytes> {
+    type Output = Chunk<'bytes>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.chunks[index]
+    }
+}
+
+impl<'bytes> IndexMut<usize> for File<'bytes> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.chunks[index]
     }
 }
 
