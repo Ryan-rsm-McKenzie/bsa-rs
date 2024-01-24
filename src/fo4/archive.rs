@@ -23,11 +23,11 @@ mod constants {
     pub(crate) const HEADER_SIZE_V2: usize = 0x20;
     pub(crate) const HEADER_SIZE_V3: usize = 0x24;
 
-    pub(crate) const FILE_HEADER_SIZE_GNRL: usize = 0x10;
-    pub(crate) const FILE_HEADER_SIZE_DX10: usize = 0x18;
+    pub(crate) const FILE_HEADER_SIZE_GNRL: u16 = 0x10;
+    pub(crate) const FILE_HEADER_SIZE_DX10: u16 = 0x18;
 
-    pub(crate) const CHUNK_SIZE_GNRL: u16 = 0x14;
-    pub(crate) const CHUNK_SIZE_DX10: u16 = 0x18;
+    pub(crate) const CHUNK_SIZE_GNRL: usize = 0x14;
+    pub(crate) const CHUNK_SIZE_DX10: usize = 0x18;
 
     pub(crate) const CHUNK_SENTINEL: u32 = 0xBAAD_F00D;
 }
@@ -53,8 +53,8 @@ impl Offsets {
             };
             let chunks_count: usize = archive.values().map(File::len).sum();
             chunks_offset
-                + (archive.len() * file_header_size)
-                + (chunks_count * usize::from(chunk_size))
+                + (archive.len() * usize::from(file_header_size))
+                + (chunks_count * chunk_size)
         };
 
         let strings_offset = {
@@ -260,8 +260,8 @@ impl<'bytes> Archive<'bytes> {
 
         let chunk_count: u8 = file.len().try_into()?;
         let chunk_size = match header.format {
-            Format::GNRL => constants::CHUNK_SIZE_GNRL,
-            Format::DX10 => constants::CHUNK_SIZE_DX10,
+            Format::GNRL => constants::FILE_HEADER_SIZE_GNRL,
+            Format::DX10 => constants::FILE_HEADER_SIZE_DX10,
         };
         sink.write(&(0u8, chunk_count, chunk_size), Endian::Little)?;
 
@@ -419,7 +419,8 @@ impl<'bytes> Archive<'bytes> {
         let (_, chunk_count, chunk_size): (u8, u8, u16) = source.read(Endian::Little)?;
         if !matches!(
             (header.format, chunk_size),
-            (Format::GNRL, constants::CHUNK_SIZE_GNRL) | (Format::DX10, constants::CHUNK_SIZE_DX10)
+            (Format::GNRL, constants::FILE_HEADER_SIZE_GNRL)
+                | (Format::DX10, constants::FILE_HEADER_SIZE_DX10)
         ) {
             return Err(Error::InvalidChunkSize(chunk_size));
         }
