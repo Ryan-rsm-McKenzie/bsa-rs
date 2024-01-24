@@ -532,11 +532,13 @@ mod tests {
         Borrowed,
     };
     use anyhow::Context as _;
-    use bstr::{BString, ByteSlice as _};
+    use bstr::ByteSlice as _;
     use memmap2::Mmap;
     use std::{
+        ffi::OsString,
         fs,
         path::{Path, PathBuf},
+        str::FromStr as _,
     };
 
     #[test]
@@ -619,47 +621,49 @@ mod tests {
     #[test]
     fn write_general_archives() -> anyhow::Result<()> {
         let root = Path::new("data/fo4_write_test/data");
-        let make_key = |file: u32, extension: &[u8], directory: u32, path: &'static str| {
-            let key: ArchiveKey = path.into();
-            assert_eq!(key.hash().file, file);
-            assert_eq!(key.hash().extension, cc::make_four(extension));
-            assert_eq!(key.hash().directory, directory);
-            key
-        };
 
-        let keys = [
-            make_key(
+        struct Info {
+            key: ArchiveKey<'static>,
+            path: OsString,
+        }
+
+        impl Info {
+            #[must_use]
+            fn new(file: u32, extension: &[u8], directory: u32, path: &str) -> Self {
+                let key: ArchiveKey = path.into();
+                assert_eq!(key.hash().file, file);
+                assert_eq!(key.hash().extension, cc::make_four(extension));
+                assert_eq!(key.hash().directory, directory);
+                Self {
+                    key,
+                    path: OsString::from_str(path).unwrap(),
+                }
+            }
+        }
+
+        let infos = [
+            Info::new(
                 0x35B94567,
                 b"png",
                 0x5FE2DC26,
                 "Background/background_tilemap.png",
             ),
-            make_key(
+            Info::new(
                 0x53D5F897,
                 b"png",
                 0xD9A32978,
                 "Characters/character_0003.png",
             ),
-            make_key(0x36F72750, b"txt", 0x60648919, "Construct 3/Readme.txt"),
-            make_key(0xCA042B67, b"txt", 0x29246A47, "Share/License.txt"),
-            make_key(0xDA3773A6, b"png", 0x0B0A447E, "Tilemap/tiles.png"),
-            make_key(0x785183FF, b"png", 0xDA3773A6, "Tiles/tile_0003.png"),
+            Info::new(0x36F72750, b"txt", 0x60648919, "Construct 3/Readme.txt"),
+            Info::new(0xCA042B67, b"txt", 0x29246A47, "Share/License.txt"),
+            Info::new(0xDA3773A6, b"png", 0x0B0A447E, "Tilemap/tiles.png"),
+            Info::new(0x785183FF, b"png", 0xDA3773A6, "Tiles/tile_0003.png"),
         ];
 
-        let mappings: Vec<_> = keys
+        let mappings: Vec<_> = infos
             .iter()
-            .map(|key| {
-                let file_name: BString = key
-                    .name()
-                    .bytes()
-                    .map(|x| match x {
-                        b'\\' => b'/',
-                        _ => x,
-                    })
-                    .collect();
-                let path: PathBuf = [root.as_os_str(), file_name.to_os_str_lossy().as_ref()]
-                    .into_iter()
-                    .collect();
+            .map(|info| {
+                let path: PathBuf = [root.as_os_str(), info.path.as_ref()].into_iter().collect();
                 let fd = fs::File::open(&path)
                     .with_context(|| format!("failed to open file: {path:?}"))?;
                 let map = unsafe { Mmap::map(&fd) }
@@ -667,12 +671,12 @@ mod tests {
                 Ok(map)
             })
             .collect::<anyhow::Result<_>>()?;
-        let main: Archive = keys
+        let main: Archive = infos
             .iter()
             .zip(&mappings)
-            .map(|(key, mapping)| {
+            .map(|(info, mapping)| {
                 let file = File::read(Borrowed(&mapping[..]), &Default::default())?;
-                Ok((key.clone(), file))
+                Ok((info.key.clone(), file))
             })
             .collect::<anyhow::Result<_>>()?;
 
@@ -690,20 +694,23 @@ mod tests {
             assert_eq!(options.strings(), strings);
             assert_eq!(main.len(), child.len());
 
-            for (key, mapping) in keys.iter().zip(&mappings) {
-                let file = child.get_key_value(key).with_context(|| {
-                    format!("failed to get file: {}", key.name().to_str_lossy())
+            for (info, mapping) in infos.iter().zip(&mappings) {
+                let file = child.get_key_value(&info.key).with_context(|| {
+                    format!("failed to get file: {}", info.key.name().to_str_lossy())
                 })?;
-                assert_eq!(file.0.hash(), key.hash());
+                assert_eq!(file.0.hash(), info.key.hash());
                 assert_eq!(file.1.len(), 1);
                 if strings {
-                    assert_eq!(file.0.name(), key.name());
+                    assert_eq!(file.0.name(), info.key.name());
                 }
 
                 let chunk = &file.1[0];
                 let decompressed_chunk = if chunk.is_compressed() {
                     let result = chunk.decompress(&Default::default()).with_context(|| {
-                        format!("failed to decompress chunk: {}", key.name().to_str_lossy())
+                        format!(
+                            "failed to decompress chunk: {}",
+                            info.key.name().to_str_lossy()
+                        )
                     })?;
                     Some(result)
                 } else {
