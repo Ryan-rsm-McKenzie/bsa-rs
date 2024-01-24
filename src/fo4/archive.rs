@@ -551,6 +551,53 @@ mod tests {
     }
 
     #[test]
+    fn chunking_strategy() -> anyhow::Result<()> {
+        let root = Path::new("data/fo4_chunk_test");
+
+        let file = {
+            let options = FileReadOptions::builder()
+                .format(Format::DX10)
+                .compression_result(CompressionResult::Compressed)
+                .build();
+            File::read(root.join("test.dds").as_path(), &options).context("failed to read file")?
+        };
+
+        let FileHeader::DX10(header) = &file.header else {
+            anyhow::bail!("file was not dx10");
+        };
+        assert_eq!(header.mip_count, 11);
+        assert_eq!(
+            header.format,
+            DXGI_FORMAT::DXGI_FORMAT_BC1_UNORM.bits() as u8
+        );
+        assert_eq!(file.len(), 3);
+
+        let mut index = 0;
+        let mut next_chunk = || {
+            let chunk = &file[index];
+            index += 1;
+            let ChunkExtra::DX10(extra) = &chunk.extra else {
+                anyhow::bail!("chunk was not dx10: {:?}", chunk.extra);
+            };
+            Ok((chunk, extra))
+        };
+
+        let (chunk, extra) = next_chunk()?;
+        assert_eq!(chunk.decompressed_len(), Some(0x8_0000));
+        assert_eq!(extra.mips, 0..=0);
+
+        let (chunk, extra) = next_chunk()?;
+        assert_eq!(chunk.decompressed_len(), Some(0x2_0000));
+        assert_eq!(extra.mips, 1..=1);
+
+        let (chunk, extra) = next_chunk()?;
+        assert_eq!(chunk.decompressed_len(), Some(0xAAB8));
+        assert_eq!(extra.mips, 2..=10);
+
+        Ok(())
+    }
+
+    #[test]
     fn read_write_texture_archives() -> anyhow::Result<()> {
         let path = Path::new("data/fo4_dds_test/in.ba2");
         let original = {
