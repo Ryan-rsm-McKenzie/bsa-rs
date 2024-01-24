@@ -10,6 +10,7 @@ use crate::{
 };
 use core::{
     fmt::{self, Debug, Display, Formatter},
+    num::NonZeroUsize,
     ops::{Index, IndexMut, Range, RangeBounds},
     ptr::NonNull,
     result, slice,
@@ -443,47 +444,49 @@ impl<'bytes> File<'bytes> {
             })
         };
 
-        let chunks = if images.is_empty() {
-            Vec::new()
-        } else if is_cubemap {
-            // don't chunk cubemaps
-            let chunk = chunk_from_mips(0..images.len())?;
-            [chunk].into_iter().collect()
-        } else {
-            let pitch = meta.format.compute_pitch(
-                options.mip_chunk_width,
-                options.mip_chunk_height,
-                CP_FLAGS::CP_FLAGS_NONE,
-            )?;
+        let chunks = if let Some(images_len) = NonZeroUsize::new(images.len()) {
+            if is_cubemap {
+                // don't chunk cubemaps
+                let chunk = chunk_from_mips(0..images_len.get())?;
+                [chunk].into_iter().collect()
+            } else {
+                let pitch = meta.format.compute_pitch(
+                    options.mip_chunk_width,
+                    options.mip_chunk_height,
+                    CP_FLAGS::CP_FLAGS_NONE,
+                )?;
 
-            let mut v = Vec::with_capacity(4);
-            let mut size = 0;
-            let mut start = 0;
-            let mut stop = 0;
-            loop {
-                let image = &images[stop];
-                if size == 0 || size + image.slice_pitch < pitch.slice {
-                    size += image.slice_pitch;
-                } else {
-                    let chunk = chunk_from_mips(start..stop)?;
+                let mut v = Vec::with_capacity(4);
+                let mut size = 0;
+                let mut start = 0;
+                let mut stop = 0;
+                loop {
+                    let image = &images[stop];
+                    if size == 0 || size + image.slice_pitch < pitch.slice {
+                        size += image.slice_pitch;
+                    } else {
+                        let chunk = chunk_from_mips(start..stop)?;
+                        v.push(chunk);
+                        start = stop;
+                        size = image.slice_pitch;
+                    }
+
+                    stop += 1;
+                    if stop == images_len.get() || v.len() == 3 {
+                        break;
+                    }
+                }
+
+                if stop < images_len.get() {
+                    let chunk = chunk_from_mips(stop..images_len.get())?;
                     v.push(chunk);
-                    start = stop;
-                    size = image.slice_pitch;
                 }
 
-                stop += 1;
-                if stop == images.len() || v.len() == 3 {
-                    break;
-                }
+                debug_assert!(v.len() <= 4);
+                v
             }
-
-            if stop < images.len() {
-                let chunk = chunk_from_mips(stop..images.len())?;
-                v.push(chunk);
-            }
-
-            debug_assert!(v.len() <= 4);
-            v
+        } else {
+            Vec::new()
         };
 
         Ok(Self { chunks, header })
