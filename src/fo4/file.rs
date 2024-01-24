@@ -492,6 +492,9 @@ impl<'bytes> File<'bytes> {
                 if stop < images_len.get() {
                     let chunk = chunk_from_mips(stop..images_len.get())?;
                     v.push(chunk);
+                } else {
+                    let chunk = chunk_from_mips(start..stop)?;
+                    v.push(chunk);
                 }
 
                 debug_assert!(v.len() <= 4);
