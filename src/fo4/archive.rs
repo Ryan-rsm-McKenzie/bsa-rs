@@ -519,3 +519,92 @@ impl<'bytes> Archive<'bytes> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        fo4::{Archive, ArchiveKey, ChunkExtra, CompressionFormat, FileHeader, Format, Version},
+        prelude::*,
+        Borrowed,
+    };
+    use anyhow::Context as _;
+    use memmap2::Mmap;
+    use std::{fs, path::Path};
+
+    #[test]
+    fn default_state() {
+        let archive = Archive::default();
+        assert!(archive.is_empty());
+        assert_eq!(archive.len(), 0);
+    }
+
+    #[test]
+    fn texture_archives() -> anyhow::Result<()> {
+        let path = Path::new("data/fo4_dds_test/in.ba2");
+        let original = {
+            let fd =
+                fs::File::open(path).with_context(|| format!("failed to open file: {path:?}"))?;
+            unsafe { Mmap::map(&fd) }
+                .with_context(|| format!("failed to memory map file: {path:?}"))?
+        };
+
+        let (archive, options) = Archive::read(Borrowed(&original[..]))
+            .with_context(|| format!("failed to read archive: {path:?}"))?;
+        assert_eq!(options.compression_format, CompressionFormat::Zip);
+        assert_eq!(options.format, Format::DX10);
+        assert_eq!(options.strings, true);
+        assert_eq!(options.version, Version::v1);
+        assert_eq!(archive.len(), 1);
+
+        let file = archive
+            .get(&ArchiveKey::from("Fence006_1K_Roughness.dds"))
+            .context("failed to get file from archive")?;
+        let FileHeader::DX10(header) = &file.header else {
+            anyhow::bail!("file header was not dx10");
+        };
+        assert_eq!(file.len(), 3);
+        assert_eq!(header.height, 1024);
+        assert_eq!(header.width, 1024);
+        assert_eq!(header.mip_count, 11);
+        assert_eq!(header.format, 98);
+        assert_eq!(header.flags, 0);
+        assert_eq!(header.tile_mode, 8);
+
+        let mut idx = 0;
+        let mut next_chunk = || {
+            let chunk = &file[idx];
+            idx += 1;
+            let ChunkExtra::DX10(extra) = &chunk.extra else {
+                anyhow::bail!("chunk extra was not dx10");
+            };
+            Ok((chunk, extra))
+        };
+
+        let (chunk, extra) = next_chunk()?;
+        assert_eq!(chunk.len(), 0x100_000);
+        assert_eq!(*extra.mips.start(), 0);
+        assert_eq!(*extra.mips.end(), 0);
+
+        let (chunk, extra) = next_chunk()?;
+        assert_eq!(chunk.len(), 0x40_000);
+        assert_eq!(*extra.mips.start(), 1);
+        assert_eq!(*extra.mips.end(), 1);
+
+        let (chunk, extra) = next_chunk()?;
+        assert_eq!(chunk.len(), 0x15_570);
+        assert_eq!(*extra.mips.start(), 2);
+        assert_eq!(*extra.mips.end(), 10);
+
+        let copy = {
+            let mut v = Vec::new();
+            archive
+                .write(&mut v, &options)
+                .with_context(|| format!("failed to write archive: {path:?}"))?;
+            v
+        };
+
+        assert_eq!(original.len(), copy.len());
+        assert_eq!(&original[..], copy);
+        Ok(())
+    }
+}
