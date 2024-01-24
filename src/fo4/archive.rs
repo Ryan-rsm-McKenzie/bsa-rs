@@ -408,6 +408,7 @@ impl<'bytes> Archive<'bytes> {
             BString::default()
         } else {
             source.save_restore_position(|source| -> Result<BString> {
+                source.seek_absolute(*strings)?;
                 let name = source.read_protocol::<WString>(Endian::Little)?;
                 *strings = source.stream_position();
                 Ok(name)
