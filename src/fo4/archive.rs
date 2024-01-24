@@ -532,7 +532,7 @@ mod tests {
         Borrowed,
     };
     use anyhow::Context as _;
-    use bstr::ByteSlice as _;
+    use bstr::{BString, ByteSlice as _};
     use memmap2::Mmap;
     use std::{
         fs,
@@ -649,7 +649,15 @@ mod tests {
         let mappings: Vec<_> = keys
             .iter()
             .map(|key| {
-                let path: PathBuf = [root.as_os_str(), key.name().to_os_str_lossy().as_ref()]
+                let file_name: BString = key
+                    .name()
+                    .bytes()
+                    .map(|x| match x {
+                        b'\\' => b'/',
+                        _ => x,
+                    })
+                    .collect();
+                let path: PathBuf = [root.as_os_str(), file_name.to_os_str_lossy().as_ref()]
                     .into_iter()
                     .collect();
                 let fd = fs::File::open(&path)
