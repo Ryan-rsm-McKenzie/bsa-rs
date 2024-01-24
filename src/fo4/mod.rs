@@ -4,7 +4,10 @@ mod file;
 mod hashing;
 
 pub use self::{
-    archive::{Archive, Options as ArchiveOptions, OptionsBuilder as ArchiveOptionsBuilder},
+    archive::{
+        Archive, Key as ArchiveKey, Options as ArchiveOptions,
+        OptionsBuilder as ArchiveOptionsBuilder,
+    },
     chunk::{
         Chunk, CompressionOptions as ChunkCompressionOptions,
         CompressionOptionsBuilder as ChunkCompressionOptionsBuilder, Extra as ChunkExtra,
