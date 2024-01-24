@@ -22,7 +22,7 @@ pub use self::{
     hashing::{hash_file, hash_file_in_place, FileHash, Hash},
 };
 
-use core::num::TryFromIntError;
+use core::{convert::Infallible, num::TryFromIntError};
 use directxtex::HResultError;
 use std::io;
 
@@ -45,6 +45,10 @@ pub enum Error {
         "attempted to write an archive in a format that does not match a file/chunk in the archive"
     )]
     FormatMismatch,
+
+    #[doc(hidden)]
+    #[error(transparent)]
+    Infallible(#[from] Infallible),
 
     #[error("an operation on an integer would have truncated and corrupted data")]
     IntegralTruncation,
