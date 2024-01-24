@@ -442,7 +442,11 @@ impl<'bytes> File<'bytes> {
 
         let images = scratch.images();
         let chunk_from_mips = |range: Range<usize>| -> Result<Chunk> {
-            let mips = range.start.try_into()?..=(range.end - 1).try_into()?;
+            let try_clamp = |num: usize| -> Result<u16> {
+                let result = usize::min(meta.mip_levels.saturating_sub(1), num).try_into()?;
+                Ok(result)
+            };
+            let mips = try_clamp(range.start)?..=try_clamp(range.end - 1)?;
             let mut bytes = Vec::new();
             for image in &images[range] {
                 let ptr = NonNull::new(image.pixels).unwrap_or(NonNull::dangling());
