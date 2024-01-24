@@ -8,6 +8,7 @@ include = [
   "src/*",
   "Cargo.toml",
   "LICENSE",
+  "README.md",
 ]
 keywords = ["archive", "ba2", "bethesda", "bgs", "bsa"]
 license = "0BSD"
