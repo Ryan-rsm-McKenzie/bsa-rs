@@ -683,6 +683,54 @@ mod tests {
     }
 
     #[test]
+    fn string_tables_are_optional() -> anyhow::Result<()> {
+        let root = Path::new("data/fo4_missing_string_table_test");
+        let original = {
+            let fd = fs::File::open(root.join("in.ba2")).context("failed to open archive")?;
+            unsafe { Mmap::map(&fd) }.context("failed to map archive")?
+        };
+
+        let (archive, options) = {
+            let (archive, options) =
+                Archive::read(Borrowed(&original[..])).context("failed to read archive")?;
+            assert_eq!(options.format(), Format::GNRL);
+
+            let file_name = "misc/example.txt";
+            let (key, file) = archive
+                .get_key_value(&ArchiveKey::from("misc/example.txt"))
+                .context("failed to get file")?;
+            assert!(key.name().is_empty());
+            assert_eq!(file.len(), 1);
+
+            let chunk = &file[0];
+            let mapped = {
+                let fd = fs::File::open(root.join("data").join(file_name))
+                    .context("failed to open original file")?;
+                unsafe { Mmap::map(&fd) }.context("failed to map file")?
+            };
+
+            assert!(chunk.is_decompressed());
+            assert_eq!(chunk.len(), mapped.len());
+            assert_eq!(chunk.as_bytes(), &mapped[..]);
+
+            (archive, options)
+        };
+
+        let copy = {
+            let mut v = Vec::new();
+            archive
+                .write(&mut v, &options)
+                .context("failed to write archive")?;
+            v
+        };
+
+        assert_eq!(copy.len(), original.len());
+        assert_eq!(copy, &original[..]);
+
+        Ok(())
+    }
+
+    #[test]
     fn write_general_archives() -> anyhow::Result<()> {
         let root = Path::new("data/fo4_write_test/data");
 
