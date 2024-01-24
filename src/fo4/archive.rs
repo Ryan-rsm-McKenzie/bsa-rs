@@ -538,10 +538,12 @@ mod tests {
     use memmap2::Mmap;
     use std::{
         ffi::OsString,
-        fs, io,
+        fs,
+        io::{self, Read as _},
         path::{Path, PathBuf},
         str::FromStr as _,
     };
+    use walkdir::WalkDir;
 
     #[test]
     fn default_state() {
@@ -592,6 +594,62 @@ mod tests {
         let (chunk, extra) = next_chunk()?;
         assert_eq!(chunk.decompressed_len(), Some(0xAAB8));
         assert_eq!(extra.mips, 2..=10);
+
+        Ok(())
+    }
+
+    #[test]
+    fn archives_with_compression() -> anyhow::Result<()> {
+        let root_path = Path::new("data/fo4_compression_test");
+        for archive_name in ["normal.ba2", "xbox.ba2"] {
+            let (archive, options) = Archive::read(root_path.join(archive_name).as_path())
+                .context("failed to read archive")?;
+            assert_eq!(options.format(), Format::GNRL);
+            assert_eq!(options.compression_format(), CompressionFormat::Zip);
+
+            let root_path = root_path.join("data");
+            for file_path in WalkDir::new(&root_path) {
+                if let Ok(file_path) = file_path {
+                    let metadata = file_path.metadata().with_context(|| {
+                        format!(
+                            "failed to get metadata for file path: {:?}",
+                            file_path.path()
+                        )
+                    })?;
+                    if metadata.is_file() {
+                        let key = file_path
+                            .path()
+                            .strip_prefix(&root_path)
+                            .with_context(|| {
+                                format!(
+                                "failed to strip prefix ({root_path:?}) from path ({file_path:?})"
+                            )
+                            })?
+                            .as_os_str();
+                        let file = archive
+                            .get(&ArchiveKey::from(key.as_encoded_bytes()))
+                            .with_context(|| format!("failed to get file with key: {key:?}"))?;
+                        assert_eq!(file.len(), 1);
+
+                        let chunk = &file[0];
+                        assert!(chunk.is_compressed());
+                        let chunk = chunk.decompress(&Default::default()).with_context(|| {
+                            format!("failed to decompress chunk for file: {file_path:?}")
+                        })?;
+                        assert!(chunk.is_decompressed());
+                        assert_eq!(chunk.len() as u64, metadata.len());
+
+                        let mut original_data = Vec::new();
+                        fs::File::open(file_path.path())
+                            .with_context(|| format!("failed to open file: {file_path:?}"))?
+                            .read_to_end(&mut original_data)
+                            .with_context(|| format!("failed to read from file: {file_path:?}"))?;
+                        assert_eq!(chunk.len(), original_data.len());
+                        assert_eq!(chunk.as_bytes(), &original_data);
+                    }
+                }
+            }
+        }
 
         Ok(())
     }
