@@ -96,7 +96,7 @@ impl ReadOptionsBuilder {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct ReadOptions {
     format: Format,
     mip_chunk_width: usize,
@@ -139,6 +139,18 @@ impl ReadOptions {
     #[must_use]
     pub fn mip_chunk_width(&self) -> usize {
         self.mip_chunk_width
+    }
+}
+
+impl Default for ReadOptions {
+    fn default() -> Self {
+        Self {
+            format: Format::default(),
+            mip_chunk_width: 512,
+            mip_chunk_height: 512,
+            compression_options: ChunkCompressionOptions::default(),
+            compression_result: CompressionResult::default(),
+        }
     }
 }
 
