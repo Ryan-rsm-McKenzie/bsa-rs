@@ -4,6 +4,7 @@
     clippy::std_instead_of_core
 )]
 #![allow(
+    unknown_lints,
     clippy::enum_glob_use,
     clippy::missing_errors_doc,
     clippy::struct_field_names
