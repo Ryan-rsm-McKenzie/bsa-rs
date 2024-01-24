@@ -5,8 +5,8 @@ on:
     branches: ['main']
     paths:
       - '.github/workflows/main_ci.yml'
-      - 'data/*'
-      - 'src/*'
+      - 'data/**/*'
+      - 'src/**/*.rs'
       - 'Cargo.lock'
       - 'Cargo.toml'
   pull_request:
