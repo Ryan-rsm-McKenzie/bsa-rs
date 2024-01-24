@@ -3,7 +3,11 @@
     clippy::single_char_lifetime_names,
     clippy::std_instead_of_core
 )]
-#![allow(clippy::enum_glob_use, clippy::missing_errors_doc)]
+#![allow(
+    clippy::enum_glob_use,
+    clippy::missing_errors_doc,
+    clippy::struct_field_names
+)]
 
 mod cc;
 mod containers;

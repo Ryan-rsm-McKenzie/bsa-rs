@@ -517,7 +517,10 @@ impl<'bytes> File<'bytes> {
             misc_flags: if (dx10.flags & 1) == 0 {
                 0
             } else {
-                TEX_MISC_FLAG::TEX_MISC_TEXTURECUBE.bits().try_into()?
+                #[allow(clippy::useless_conversion)]
+                {
+                    TEX_MISC_FLAG::TEX_MISC_TEXTURECUBE.bits().try_into()?
+                }
             },
             misc_flags2: 0,
             format: u32::from(dx10.format).into(),

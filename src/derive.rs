@@ -230,6 +230,8 @@ macro_rules! key {
             pub name: ::bstr::BString,
         }
 
+        // false positive
+        #[allow(clippy::unconditional_recursion)]
         impl ::core::cmp::PartialEq for $this {
             fn eq(&self, other: &Self) -> bool {
                 self.hash.eq(&other.hash)
