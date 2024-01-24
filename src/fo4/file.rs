@@ -239,11 +239,6 @@ impl<'bytes> File<'bytes> {
         self.chunks.as_slice()
     }
 
-    #[must_use]
-    pub fn capacity(&self) -> usize {
-        4
-    }
-
     pub fn clear(&mut self) {
         self.chunks.clear();
     }
@@ -272,7 +267,7 @@ impl<'bytes> File<'bytes> {
 
     #[must_use]
     pub fn is_full(&self) -> bool {
-        self.len() == self.capacity()
+        self.len() >= 4
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Chunk<'bytes>> {
@@ -306,7 +301,7 @@ impl<'bytes> File<'bytes> {
 
     #[must_use]
     pub fn remaining_capacity(&self) -> usize {
-        self.capacity() - self.len()
+        4usize.saturating_sub(self.len())
     }
 
     /// # Panics
@@ -392,7 +387,7 @@ impl<'bytes> File<'bytes> {
             0 | 3 => self.chunks.reserve_exact(1),
             1 => self.chunks.reserve_exact(3),
             2 => self.chunks.reserve_exact(2),
-            _ => unreachable!(),
+            _ => (),
         }
     }
 
@@ -621,6 +616,5 @@ mod tests {
         assert!(f.is_empty());
         assert!(f.as_slice().is_empty());
         assert!(!f.is_full());
-        assert_eq!(f.capacity(), 4);
     }
 }
