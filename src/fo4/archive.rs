@@ -755,6 +755,35 @@ mod tests {
     }
 
     #[test]
+    fn dx9() -> anyhow::Result<()> {
+        let root = Path::new("data/fo4_dx9_test");
+        let file_names = ["dx9.dds", "blacksky_e.dds", "bleakfallscube_e.dds"];
+        for file_name in file_names {
+            let original = {
+                let fd = fs::File::open(root.join(file_name))
+                    .with_context(|| format!("failed to open file: {file_name}"))?;
+                unsafe { Mmap::map(&fd) }
+                    .with_context(|| format!("failed to map file: {file_name}"))?
+            };
+
+            let copy = {
+                let options = FileReadOptions::builder().format(Format::DX10).build();
+                let file = File::read(Borrowed(&original[..]), &options)
+                    .with_context(|| format!("failed to read file: {file_name}"))?;
+                let mut v = Vec::new();
+                file.write(&mut v, &Default::default())
+                    .with_context(|| format!("failed to write file: {file_name}"))?;
+                v
+            };
+
+            assert_eq!(original.len(), copy.len());
+            assert_eq!(&original[..], &copy);
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn invalid_exhausted() -> anyhow::Result<()> {
         let path = Path::new("data/fo4_invalid_test/invalid_exhausted.ba2");
         match Archive::read(path) {
