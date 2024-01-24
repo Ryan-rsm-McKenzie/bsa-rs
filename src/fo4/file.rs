@@ -220,6 +220,7 @@ impl From<DX10> for Header {
 
 type Container<'bytes> = Vec<Chunk<'bytes>>;
 
+/// Represents a file within the FO4 virtual filesystem.
 #[derive(Clone, Debug, Default)]
 pub struct File<'bytes> {
     pub(crate) chunks: Container<'bytes>,

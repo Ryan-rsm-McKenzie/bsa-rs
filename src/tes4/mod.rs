@@ -66,14 +66,19 @@ impl From<TryFromIntError> for Error {
 
 pub type Result<T> = core::result::Result<T, Error>;
 
+/// Specifies the codec to use when performing compression/decompression actions on files.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum CompressionCodec {
+    /// The default compression codec.
     #[default]
     Normal,
     //XMem,
 }
 
+/// The archive version.
+///
+/// Each version has an impact on the abi of the TES4 archive file format.
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Version {
@@ -84,9 +89,14 @@ pub enum Version {
 }
 
 impl Version {
+    /// The Elder Scrolls IV: Oblivion.
     pub const TES4: Self = Self::v103;
+    /// Fallout 3.
     pub const FO3: Self = Self::v104;
+    /// Fallout: New Vegas.
     pub const FNV: Self = Self::v104;
+    /// The Elder Scrolls V: Skyrim.
     pub const TES5: Self = Self::v104;
+    /// The Elder Scrolls V: Skyrim - Special Edition.
     pub const SSE: Self = Self::v105;
 }

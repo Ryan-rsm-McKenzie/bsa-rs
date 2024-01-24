@@ -23,8 +23,14 @@ pub mod tes4;
 
 pub use guess::{guess_format, FileFormat};
 
+/// Makes a shallow copy of the input.
+///
+/// The lifetime of the result is tied to the input buffer.
 pub struct Borrowed<'borrow>(pub &'borrow [u8]);
 
+/// Makes a deep copy of the input.
+///
+/// The lifetime of the result is independent of the input buffer.
 pub struct Copied<'copy>(pub &'copy [u8]);
 
 mod private {
@@ -37,20 +43,26 @@ pub trait Reader<T>: Sealed {
     type Error;
     type Item;
 
+    /// Reads and instance `Self::Item` from the given source.
     fn read(source: T) -> core::result::Result<Self::Item, Self::Error>;
 }
 
 pub trait CompressableFrom<T>: Sealed {
+    /// Makes a compressed instance of `Self` using the given data.
     #[must_use]
     fn from_compressed(value: T, decompressed_len: usize) -> Self;
 
+    /// Makes a decompressed instance of `Self` using the given data.
     #[must_use]
     fn from_decompressed(value: T) -> Self;
 }
 
+/// Indicates whether the operation should finish by compressing the data or not.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum CompressionResult {
+    /// The data will finish in a compressed state.
     Compressed,
+    /// The data will finish in a decompressed state.
     #[default]
     Decompressed,
 }
@@ -60,11 +72,13 @@ pub trait ReaderWithOptions<T>: Sealed {
     type Item;
     type Options;
 
+    /// Reads an instance of `Self::Item` from the given source, using the given options.
     fn read(source: T, options: &Self::Options) -> core::result::Result<Self::Item, Self::Error>;
 }
 
 pub use bstr::{BStr, BString, ByteSlice, ByteVec};
 
+/// Convenience using statements for traits that are needed to work with the library.
 pub mod prelude {
     pub use crate::{CompressableFrom as _, Reader as _, ReaderWithOptions as _};
 }

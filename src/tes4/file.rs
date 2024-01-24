@@ -124,6 +124,7 @@ impl ReadOptions {
     }
 }
 
+/// Represents a file within the TES4 virtual filesystem.
 #[derive(Clone, Debug, Default)]
 pub struct File<'bytes> {
     pub(crate) bytes: CompressableBytes<'bytes>,

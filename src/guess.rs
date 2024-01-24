@@ -2,6 +2,7 @@ use crate::cc;
 use core::mem;
 use std::io::Read;
 
+/// The file format for a given archive.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FileFormat {
     TES3,
@@ -12,6 +13,9 @@ pub enum FileFormat {
 const BSA: u32 = cc::make_four(b"BSA");
 const BTDX: u32 = cc::make_four(b"BTDX");
 
+/// Guesses the archive format for a given source.
+///
+/// This function does not guarantee that the given source constitutes a well-formed archive of the deduced format. It merely remarks that if the file were a well-formed archive, it would be of the deduced format.
 #[allow(clippy::module_name_repetitions)]
 pub fn guess_format<In>(source: &mut In) -> Option<FileFormat>
 where

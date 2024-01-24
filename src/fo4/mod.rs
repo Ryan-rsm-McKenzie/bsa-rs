@@ -83,37 +83,66 @@ impl From<TryFromIntError> for Error {
 
 pub type Result<T> = core::result::Result<T, Error>;
 
+/// A list of all compression methods supported by the ba2 format.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum CompressionFormat {
+    /// The default compression format, compatible with all games that utilize the ba2 format.
     #[default]
     Zip,
+
+    /// A more specialized format leveraging lz4's fast decompression to improve streaming time.
+    ///
+    /// Only compatible with Starfield or later.
     LZ4,
 }
 
+/// Specifies the compression level to use when compressing data.
+///
+/// Only compatible with [`CompressionFormat::Zip`].
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum CompressionLevel {
+    /// Fallout 4.
     #[default]
     FO4,
+
+    /// Fallout 4 on the xbox.
+    ///
+    /// Uses a smaller windows size, but higher a compression level to yield a higher compression ratio.
     FO4Xbox,
+
+    /// Starfield.
+    ///
+    /// Uses a custom DEFLATE algorithm with zlib wrapper to obtain a good compression ratio.
     SF,
 }
 
 impl CompressionLevel {
+    /// Fallout 76.
     pub const FO76: Self = Self::FO4;
 }
 
+/// Represents the file format for an archive.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Format {
+    /// A general archive can contain any kind of file.
     #[default]
     GNRL,
+
+    /// A directx archive can only contain .dds files.
     DX10,
 }
 
+/// Indicates the version of an archive.
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Version {
+    /// Initial format introduced in Fallout 4.
     #[default]
     v1 = 1,
+
+    /// Intoduced in Starfield.
     v2 = 2,
+
+    /// Intoduced in Starfield.
     v3 = 3,
 }

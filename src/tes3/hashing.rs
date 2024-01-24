@@ -2,6 +2,7 @@ use crate::{derive, hashing};
 use bstr::{BStr, BString};
 use core::cmp::Ordering;
 
+/// The underlying hash object used to uniquely identify objects within the archive.
 #[derive(Clone, Copy, Debug, Default)]
 #[repr(C)]
 pub struct Hash {
@@ -44,12 +45,16 @@ impl Ord for Hash {
     }
 }
 
+/// Produces a hash using the given path.
 #[must_use]
 pub fn hash_file(path: &BStr) -> (FileHash, BString) {
     let mut path = path.to_owned();
     (hash_file_in_place(&mut path), path)
 }
 
+/// Produces a hash using the given path.
+///
+/// The path is normalized in place. After the function returns, the path contains the string that would be stored on disk.
 #[must_use]
 pub fn hash_file_in_place(path: &mut BString) -> FileHash {
     hashing::normalize_path(path);

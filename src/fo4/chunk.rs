@@ -88,6 +88,7 @@ impl From<DX10> for Extra {
     }
 }
 
+/// Represents a chunk of a file within the FO4 virtual filesystem.
 #[derive(Clone, Debug, Default)]
 pub struct Chunk<'bytes> {
     pub(crate) bytes: CompressableBytes<'bytes>,

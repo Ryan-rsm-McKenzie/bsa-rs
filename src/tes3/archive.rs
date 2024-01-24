@@ -54,7 +54,11 @@ impl<'bytes> Key<'bytes> {
 }
 
 type ReadResult<T> = T;
-derive::archive!(Archive => ReadResult, Map: (Key: FileHash) => File);
+derive::archive! {
+    /// Represents the TES3 revision of the bsa format.
+    Archive => ReadResult
+    Map: (Key: FileHash) => File
+}
 
 impl<'bytes> Archive<'bytes> {
     pub fn write<Out>(&self, stream: &mut Out) -> Result<()>

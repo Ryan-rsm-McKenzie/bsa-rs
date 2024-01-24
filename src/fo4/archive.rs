@@ -162,7 +162,11 @@ impl<'bytes> Key<'bytes> {
 }
 
 type ReadResult<T> = (T, Options);
-derive::archive!(Archive => ReadResult, Map: (Key: FileHash) => File);
+derive::archive! {
+    /// Represents the FO4 revision of the ba2 format.
+    Archive => ReadResult
+    Map: (Key: FileHash) => File
+}
 
 impl<'bytes> Archive<'bytes> {
     pub fn write<Out>(&self, stream: &mut Out, options: &Options) -> Result<()>

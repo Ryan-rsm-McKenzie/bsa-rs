@@ -6,6 +6,7 @@ use crate::{
 };
 use std::io::Write;
 
+/// Represents a file within the TES3 virtual filesystem.
 #[derive(Clone, Debug, Default)]
 pub struct File<'bytes> {
     pub(crate) bytes: Bytes<'bytes>,

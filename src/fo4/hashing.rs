@@ -2,11 +2,15 @@ use crate::{derive, hashing};
 use bstr::{BStr, BString, ByteSlice as _};
 
 // archives aren't sorted in any particular order, so we can just default these
+/// The underlying hash object used to uniquely identify objects within the archive.
 #[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 #[repr(C)]
 pub struct Hash {
+    /// The file's stem crc.
     pub file: u32,
+    /// The first 4 bytes of the file's extension.
     pub extension: u32,
+    /// The file's parent path crc.
     pub directory: u32,
 }
 
@@ -97,12 +101,16 @@ fn split_path(path: &BStr) -> Split<'_> {
     }
 }
 
+/// Produces a hash using the given path.
 #[must_use]
 pub fn hash_file(path: &BStr) -> (FileHash, BString) {
     let mut path = path.to_owned();
     (hash_file_in_place(&mut path), path)
 }
 
+/// Produces a hash using the given path.
+///
+/// The path is normalized in place. After the function returns, the path contains the string that would be stored on disk.
 #[must_use]
 pub fn hash_file_in_place(path: &mut BString) -> FileHash {
     hashing::normalize_path(path);

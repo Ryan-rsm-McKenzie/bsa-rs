@@ -13,7 +13,11 @@ impl<'bytes> Key<'bytes> {
     }
 }
 
-derive::mapping!(Directory, Map: (Key: FileHash) => File);
+derive::mapping! {
+    /// Represents a directory within the TES4 virtual filesystem.
+    Directory
+    Map: (Key: FileHash) => File
+}
 
 #[cfg(test)]
 mod tests {

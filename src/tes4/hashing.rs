@@ -2,12 +2,17 @@ use crate::{cc, derive, hashing};
 use bstr::{BStr, BString, ByteSlice as _};
 use core::cmp::Ordering;
 
+/// The underlying hash object used to uniquely identify objects within the archive.
 #[derive(Clone, Copy, Debug, Default)]
 #[repr(C)]
 pub struct Hash {
+    /// The last character of the path (directory) or stem (file).
     pub last: u8,
+    /// The second to last character of the path (directory) or stem (file).
     pub last2: u8,
+    /// The length of the path (directory) or stem (file).
     pub length: u8,
+    /// The first character of the path (directory) or stem (file).
     pub first: u8,
     pub crc: u32,
 }
@@ -60,12 +65,16 @@ fn crc32(bytes: &[u8]) -> u32 {
     crc
 }
 
+/// Produces a hash using the given path.
 #[must_use]
 pub fn hash_directory(path: &BStr) -> (DirectoryHash, BString) {
     let mut path = path.to_owned();
     (hash_directory_in_place(&mut path), path)
 }
 
+/// Produces a hash using the given path.
+///
+/// The path is normalized in place. After the function returns, the path contains the string that would be stored on disk.
 #[must_use]
 pub fn hash_directory_in_place(path: &mut BString) -> DirectoryHash {
     hashing::normalize_path(path);
@@ -93,12 +102,16 @@ pub fn hash_directory_in_place(path: &mut BString) -> DirectoryHash {
     h.into()
 }
 
+/// Produces a hash using the given path.
 #[must_use]
 pub fn hash_file(path: &BStr) -> (FileHash, BString) {
     let mut path = path.to_owned();
     (hash_file_in_place(&mut path), path)
 }
 
+/// Produces a hash using the given path.
+///
+/// The path is normalized in place. After the function returns, the path contains the string that would be stored on disk.
 #[must_use]
 pub fn hash_file_in_place(path: &mut BString) -> FileHash {
     const LUT: [u32; 6] = [

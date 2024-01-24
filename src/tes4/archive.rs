@@ -13,19 +13,62 @@ use core::mem;
 use std::{borrow::Cow, io::Write};
 
 bitflags::bitflags! {
+    /// Archive flags can impact the layout of an archive, or how it is read.
     #[repr(transparent)]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct Flags: u32 {
+        /// Includes directory paths within the archive.
+        ///
+        /// `archive.exe` does not let you write archives without this flag set.
+        ///
+        /// This includes only the parent path of all files, and not filenames.
         const DIRECTORY_STRINGS = 1 << 0;
+
+        /// Includes filenames within the archive.
+        ///
+        /// `archive.exe` does not let you write archives without this flag set.
+        ///
+        /// This includes only the filename of all files, and not the parent path.
         const FILE_STRINGS = 1 << 1;
+
+        /// Compresses the data within the archive.
+        ///
+        /// * The v103 format uses zlib.
+        /// * The v104 format uses xmem and zlib.
+        /// * The v105 format uses lz4.
         const COMPRESSED = 1 << 2;
+
+        /// Impacts runtime parsing.
         const RETAIN_DIRECTORY_NAMES = 1 << 3;
+
+        /// Impacts runtime parsing.
         const RETAIN_FILE_NAMES = 1 << 4;
+
+        /// Impacts runtime parsing.
         const RETAIN_FILE_NAME_OFFSETS = 1 << 5;
+
+        /// Writes the archive in the xbox (big-endian) format.
+        ///
+        /// This flag affects the sort order of files on disk.
+        ///
+        /// Only the crc hash is actually written in big-endian format.
         const XBOX_ARCHIVE = 1 << 6;
+
+        /// Impacts runtime parsing.
         const RETAIN_STRINGS_DURING_STARTUP = 1 << 7;
+
+        /// Writes the full (virtual) path of a file next to the data blob.
+        ///
+        /// This flag has a different meaning in the v103 format.
         const EMBEDDED_FILE_NAMES = 1 << 8;
+
+        /// Uses the xmem codec from XNA 4.0 to compress the archive.
+        ///
+        /// This flag requires [`Self::compressed`] to be set as well.
+        ///
+        /// This flag is unused in SSE.
         const XBOX_COMPRESSED = 1 << 9;
+
         const _ = !0;
     }
 }
@@ -89,6 +132,9 @@ impl Flags {
 }
 
 bitflags::bitflags! {
+    /// Specifies file types contained within an archive.
+    ///
+    /// It's not apparent if the game actually uses these flags for anything.
     #[repr(transparent)]
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
     pub struct Types: u16 {
@@ -316,7 +362,11 @@ impl Options {
 }
 
 type ReadResult<T> = (T, Options);
-derive::archive!(Archive => ReadResult, Map: (Key: DirectoryHash) => Directory);
+derive::archive! {
+    /// Represents the TES4 revision of the bsa format.
+    Archive => ReadResult
+    Map: (Key: DirectoryHash) => Directory
+}
 
 impl<'bytes> Archive<'bytes> {
     pub fn write<Out>(&self, stream: &mut Out, options: &Options) -> Result<()>

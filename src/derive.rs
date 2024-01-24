@@ -232,6 +232,7 @@ pub(crate) use compressable_bytes;
 
 macro_rules! key {
     ($this:ident: $hash:ident) => {
+        /// A key for indexing into the relevant mapping.
         #[derive(::core::clone::Clone, ::core::fmt::Debug, ::core::default::Default)]
         pub struct $this<'bytes> {
             pub(crate) hash: $hash,
@@ -307,12 +308,17 @@ macro_rules! key {
 pub(crate) use key;
 
 macro_rules! mapping {
-    ($this:ident, $mapping:ident: ($key:ident: $hash:ident) => $value:ident) => {
+    (
+        $(#[doc=$doc:literal])*
+        $this:ident
+        $mapping:ident: ($key:ident: $hash:ident) => $value:ident
+    ) => {
         pub(crate) type $mapping<'bytes> =
             ::std::collections::BTreeMap<$key<'bytes>, $value<'bytes>>;
 
         impl<'bytes> crate::Sealed for $this<'bytes> {}
 
+        $(#[doc=$doc])*
         #[derive(::core::clone::Clone, ::core::fmt::Debug, ::core::default::Default)]
         pub struct $this<'bytes> {
             pub(crate) map: $mapping<'bytes>,
@@ -463,8 +469,16 @@ macro_rules! mapping {
 pub(crate) use mapping;
 
 macro_rules! archive {
-    ($this:ident => $result:ident, $mapping:ident: ($key:ident: $hash:ident) => $value:ident) => {
-        crate::derive::mapping!($this, $mapping: ($key: $hash) => $value);
+    (
+        $(#[doc=$doc:literal])*
+        $this:ident => $result:ident
+        $mapping:ident: ($key:ident: $hash:ident) => $value:ident
+    ) => {
+        crate::derive::mapping! {
+            $(#[doc=$doc])*
+            $this
+            $mapping: ($key: $hash) => $value
+        }
         crate::derive::reader!($this => $result);
     };
 }
