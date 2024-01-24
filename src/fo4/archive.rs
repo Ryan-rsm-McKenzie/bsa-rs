@@ -523,13 +523,21 @@ impl<'bytes> Archive<'bytes> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        fo4::{Archive, ArchiveKey, ChunkExtra, CompressionFormat, FileHeader, Format, Version},
+        cc,
+        fo4::{
+            Archive, ArchiveKey, ArchiveOptions, ChunkExtra, CompressionFormat, File, FileHeader,
+            Format, Hash, Version,
+        },
         prelude::*,
         Borrowed,
     };
     use anyhow::Context as _;
+    use bstr::ByteSlice as _;
     use memmap2::Mmap;
-    use std::{fs, path::Path};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+    };
 
     #[test]
     fn default_state() {
@@ -539,7 +547,7 @@ mod tests {
     }
 
     #[test]
-    fn texture_archives() -> anyhow::Result<()> {
+    fn read_write_texture_archives() -> anyhow::Result<()> {
         let path = Path::new("data/fo4_dds_test/in.ba2");
         let original = {
             let fd =
@@ -605,6 +613,107 @@ mod tests {
 
         assert_eq!(original.len(), copy.len());
         assert_eq!(&original[..], copy);
+        Ok(())
+    }
+
+    #[test]
+    fn write_general_archives() -> anyhow::Result<()> {
+        let root = Path::new("data/fo4_write_test/data");
+        let make_key =
+            |file: u32, extension: &[u8], directory: u32, path: &'static str| ArchiveKey {
+                hash: Hash {
+                    file,
+                    extension: cc::make_four(extension),
+                    directory,
+                }
+                .into(),
+                name: path.into(),
+            };
+
+        let keys = [
+            make_key(
+                0x35B94567,
+                b"png",
+                0x5FE2DC26,
+                "Background/background_tilemap.png",
+            ),
+            make_key(
+                0x53D5F897,
+                b"png",
+                0xD9A32978,
+                "Characters/character_0003.png",
+            ),
+            make_key(0x36F72750, b"png", 0x60648919, "Construct 3/Readme.txt"),
+            make_key(0xCA042B67, b"png", 0x29246A47, "Share/License.txt"),
+            make_key(0xDA3773A6, b"png", 0x0B0A447E, "Tilemap/tiles.png"),
+            make_key(0x785183FF, b"png", 0xDA3773A6, "Tiles/tile_0003.png"),
+        ];
+
+        let mappings: Vec<_> = keys
+            .iter()
+            .map(|key| {
+                let path: PathBuf = [root.as_os_str(), key.name.to_os_str_lossy().as_ref()]
+                    .into_iter()
+                    .collect();
+                let fd = fs::File::open(&path)
+                    .with_context(|| format!("failed to open file: {path:?}"))?;
+                let map = unsafe { Mmap::map(&fd) }
+                    .with_context(|| format!("failed to memory map file: {path:?}"))?;
+                Ok(map)
+            })
+            .collect::<anyhow::Result<_>>()?;
+        let main: Archive = keys
+            .iter()
+            .zip(&mappings)
+            .map(|(key, mapping)| {
+                let file = File::read(Borrowed(&mapping[..]), &Default::default())?;
+                Ok((key.clone(), file))
+            })
+            .collect::<anyhow::Result<_>>()?;
+
+        let test = |strings: bool| -> anyhow::Result<()> {
+            let buffer = {
+                let mut v = Vec::new();
+                let options = ArchiveOptions::builder().strings(strings).build();
+                main.write(&mut v, &options)
+                    .context("failed to write archive to buffer")?;
+                v
+            };
+
+            let (child, options) =
+                Archive::read(Borrowed(&buffer)).context("failed to read archive from buffer")?;
+            assert_eq!(options.strings(), strings);
+            assert_eq!(main.len(), child.len());
+
+            for (key, mapping) in keys.iter().zip(&mappings) {
+                let file = child
+                    .get_key_value(key)
+                    .with_context(|| format!("failed to get file: {}", key.name.to_str_lossy()))?;
+                assert_eq!(file.0.hash, key.hash);
+                assert_eq!(file.1.len(), 1);
+                if strings {
+                    assert_eq!(file.0.name, key.name);
+                }
+
+                let chunk = &file.1[0];
+                let decompressed_chunk = if chunk.is_compressed() {
+                    let result = chunk.decompress(&Default::default()).with_context(|| {
+                        format!("failed to decompress chunk: {}", key.name.to_str_lossy())
+                    })?;
+                    Some(result)
+                } else {
+                    None
+                };
+                let decompressed_bytes = decompressed_chunk.as_ref().unwrap_or(chunk).as_bytes();
+                assert_eq!(decompressed_bytes, &mapping[..]);
+            }
+
+            Ok(())
+        };
+
+        test(true)?;
+        test(false)?;
+
         Ok(())
     }
 }
