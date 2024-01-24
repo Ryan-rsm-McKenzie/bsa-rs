@@ -137,10 +137,10 @@ impl<'bytes> Chunk<'bytes> {
         }
     }
 
-    pub(crate) fn from_bytes(bytes: CompressableBytes<'_>) -> Chunk<'_> {
+    pub(crate) fn copy_with<'other>(&self, bytes: CompressableBytes<'other>) -> Chunk<'other> {
         Chunk {
             bytes,
-            extra: Extra::default(),
+            extra: self.extra.clone(),
         }
     }
 

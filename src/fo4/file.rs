@@ -2,8 +2,8 @@ use crate::{
     containers::CompressableBytes,
     derive,
     fo4::{
-        Chunk, ChunkCompressionOptions, ChunkDX10, CompressionFormat, CompressionLevel, Error,
-        Format, Result,
+        Chunk, ChunkCompressionOptions, ChunkDX10, ChunkExtra, CompressionFormat, CompressionLevel,
+        Error, Format, Result,
     },
     io::Source,
     CompressionResult, Sealed,
@@ -510,7 +510,10 @@ impl<'bytes> File<'bytes> {
         In: ?Sized + Source<'bytes>,
     {
         let bytes = stream.read_bytes_to_end().into_compressable(None);
-        let chunk = Chunk::from_bytes(bytes);
+        let chunk = Chunk {
+            bytes,
+            extra: ChunkExtra::GNRL,
+        };
         Ok([chunk].into_iter().collect())
     }
 

@@ -172,7 +172,8 @@ impl<'bytes> File<'bytes> {
         }
     }
 
-    fn from_bytes(bytes: CompressableBytes<'_>) -> File<'_> {
+    #[allow(clippy::unused_self)]
+    fn copy_with<'other>(&self, bytes: CompressableBytes<'other>) -> File<'other> {
         File { bytes }
     }
 
@@ -208,7 +209,9 @@ impl<'bytes> File<'bytes> {
     where
         In: ?::core::marker::Sized + crate::io::Source<'bytes>,
     {
-        let decompressed = Self::from_bytes(stream.read_bytes_to_end().into_compressable(None));
+        let decompressed = Self {
+            bytes: stream.read_bytes_to_end().into_compressable(None),
+        };
         match options.compression_result {
             CompressionResult::Decompressed => Ok(decompressed),
             CompressionResult::Compressed => decompressed.compress(&options.compression_options),

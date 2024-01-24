@@ -527,13 +527,14 @@ mod tests {
         cc,
         fo4::{
             Archive, ArchiveKey, ArchiveOptions, ChunkExtra, CompressionFormat, Error, File,
-            FileHeader, Format, Version,
+            FileHeader, FileReadOptions, Format, Version,
         },
         prelude::*,
-        Borrowed,
+        Borrowed, CompressionResult,
     };
     use anyhow::Context as _;
     use bstr::ByteSlice as _;
+    use directxtex::DXGI_FORMAT;
     use memmap2::Mmap;
     use std::{
         ffi::OsString,
