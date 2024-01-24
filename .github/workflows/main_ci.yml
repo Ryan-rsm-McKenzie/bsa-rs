@@ -1,0 +1,36 @@
+name: Main CI
+
+on:
+  push:
+    branches: ['main']
+    paths:
+      - 'data/*'
+      - 'src/*'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'deny.toml'
+  pull_request:
+    branches: ['main']
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Clippy
+        run: cargo clippy
+
+      - name: Build
+        run: cargo build
+
+      - name: Test
+        run: cargo test

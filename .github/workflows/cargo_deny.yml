@@ -1,0 +1,23 @@
+name: Cargo Deny
+
+on:
+  push:
+    branches: ['main']
+    paths:
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'deny.toml'
+  pull_request:
+    branches: ['main']
+  workflow_dispatch:
+
+jobs:
+  cargo-deny:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check bans licenses sources
