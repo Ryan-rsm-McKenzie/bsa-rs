@@ -552,14 +552,13 @@ mod tests {
 
     #[test]
     fn chunking_strategy() -> anyhow::Result<()> {
-        let root = Path::new("data/fo4_chunk_test");
-
         let file = {
             let options = FileReadOptions::builder()
                 .format(Format::DX10)
                 .compression_result(CompressionResult::Compressed)
                 .build();
-            File::read(root.join("test.dds").as_path(), &options).context("failed to read file")?
+            File::read(Path::new("data/fo4_chunk_test/test.dds"), &options)
+                .context("failed to read file")?
         };
 
         let FileHeader::DX10(header) = &file.header else {
@@ -593,6 +592,36 @@ mod tests {
         let (chunk, extra) = next_chunk()?;
         assert_eq!(chunk.decompressed_len(), Some(0xAAB8));
         assert_eq!(extra.mips, 2..=10);
+
+        Ok(())
+    }
+
+    #[test]
+    fn files_with_cubemaps() -> anyhow::Result<()> {
+        let file = {
+            let options = FileReadOptions::builder()
+                .format(Format::DX10)
+                .compression_result(CompressionResult::Compressed)
+                .build();
+            File::read(Path::new("data/fo4_cubemap_test/blacksky_e.dds"), &options)
+                .context("failed to read file")?
+        };
+
+        let FileHeader::DX10(header) = &file.header else {
+            anyhow::bail!("file was not dx10");
+        };
+        assert_eq!(header.mip_count, 10);
+        assert_eq!(header.flags, 1);
+        assert_eq!(header.tile_mode, 8);
+        assert_eq!(file.len(), 1);
+
+        let chunk = &file[0];
+        let ChunkExtra::DX10(extra) = &chunk.extra else {
+            anyhow::bail!("chunk was not dx10");
+        };
+
+        assert_eq!(extra.mips, 0..=9);
+        assert_eq!(chunk.decompressed_len(), Some(0x20_00A0));
 
         Ok(())
     }
