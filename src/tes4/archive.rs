@@ -1,5 +1,5 @@
 use crate::{
-    containers::CompressableBytes,
+    containers::{Bytes, CompressableBytes},
     derive,
     io::{Endian, Sink, Source},
     protocols::{self, BZString, ZString},
@@ -232,20 +232,20 @@ impl Header {
 }
 
 struct SortedFile<'this, 'bytes> {
-    key: &'this DirectoryKey,
+    key: &'this DirectoryKey<'bytes>,
     this: &'this File<'bytes>,
     embedded_name: Option<Cow<'this, BStr>>,
 }
 
 struct SortedDirectory<'this, 'bytes> {
-    key: &'this Key,
+    key: &'this Key<'bytes>,
     this: &'this Directory<'bytes>,
     files: Vec<SortedFile<'this, 'bytes>>,
 }
 
 derive::key!(Key: DirectoryHash);
 
-impl Key {
+impl<'bytes> Key<'bytes> {
     #[must_use]
     fn hash_in_place(name: &mut BString) -> DirectoryHash {
         tes4::hash_directory_in_place(name)
@@ -347,7 +347,7 @@ impl<'bytes> Archive<'bytes> {
         let mut file_data_offset = u32::try_from(offsets.file_data)?;
         for directory in &directories {
             if options.flags.directory_strings() {
-                sink.write_protocol::<BZString>(directory.key.name.as_ref(), Endian::Little)?;
+                sink.write_protocol::<BZString>(directory.key.name(), Endian::Little)?;
             }
             for file in &directory.files {
                 Self::write_file_entry(
@@ -364,7 +364,7 @@ impl<'bytes> Archive<'bytes> {
         if options.flags.file_strings() {
             for directory in &directories {
                 for file in &directory.files {
-                    sink.write_protocol::<ZString>(file.key.name.as_ref(), Endian::Little)?;
+                    sink.write_protocol::<ZString>(file.key.name(), Endian::Little)?;
                 }
             }
         }
@@ -396,14 +396,14 @@ impl<'bytes> Archive<'bytes> {
             directories.count += 1;
             if options.flags.directory_strings() {
                 // zstring -> include null terminator
-                directories.names_len += directory.0.name.len() + 1;
+                directories.names_len += directory.0.name().len() + 1;
             }
 
             for file in directory.1 {
                 files.count += 1;
                 if options.flags.file_strings() {
                     // zstring -> include null terminator
-                    files.names_len += file.0.name.len() + 1;
+                    files.names_len += file.0.name().len() + 1;
                 }
             }
         }
@@ -420,27 +420,27 @@ impl<'bytes> Archive<'bytes> {
     }
 
     fn concat_directory_and_file_name<'string>(
-        directory: &'string Key,
-        file: &'string DirectoryKey,
+        directory: &'string Key<'bytes>,
+        file: &'string DirectoryKey<'bytes>,
     ) -> Cow<'string, BStr> {
-        let directory = &directory.name;
-        let file = &file.name;
+        let directory = directory.name();
+        let file = file.name();
 
         let directory = match directory.len() {
             0 => b"".as_bstr(),
             1 => match directory[0] {
                 b'/' | b'\\' | b'.' => b"".as_bstr(),
-                _ => directory.as_ref(),
+                _ => directory,
             },
-            _ => directory.as_ref(),
+            _ => directory,
         };
 
         match (directory.is_empty(), file.is_empty()) {
             (true, true) => Cow::default(),
-            (true, false) => Cow::from(file.as_ref()),
+            (true, false) => Cow::from(file),
             (false, true) => Cow::from(directory),
             (false, false) => {
-                let string: BString = [directory, b"\\".as_bstr(), file.as_ref()]
+                let string: BString = [directory, b"\\".as_bstr(), file]
                     .into_iter()
                     .flat_map(|x| x.as_bytes())
                     .copied()
@@ -477,7 +477,7 @@ impl<'bytes> Archive<'bytes> {
                     })
                     .collect();
                 if options.flags.xbox_archive() {
-                    files.sort_by_key(|x| x.key.hash.numeric().swap_bytes());
+                    files.sort_by_key(|x| x.key.hash().numeric().swap_bytes());
                 }
                 SortedDirectory {
                     key: directory_key,
@@ -487,7 +487,7 @@ impl<'bytes> Archive<'bytes> {
             })
             .collect();
         if options.flags.xbox_archive() {
-            directories.sort_by_key(|x| x.key.hash.numeric().swap_bytes());
+            directories.sort_by_key(|x| x.key.hash().numeric().swap_bytes());
         }
         directories
     }
@@ -495,14 +495,14 @@ impl<'bytes> Archive<'bytes> {
     fn write_directory_entry<Out>(
         sink: &mut Sink<Out>,
         options: Options,
-        key: &Key,
+        key: &Key<'bytes>,
         directory: &Directory<'bytes>,
         file_entries_offset: &mut u32,
     ) -> Result<()>
     where
         Out: Write,
     {
-        Self::write_hash(sink, options, key.hash.into())?;
+        Self::write_hash(sink, options, (*key.hash()).into())?;
 
         let file_count: u32 = directory.len().try_into()?;
         sink.write(&file_count, Endian::Little)?;
@@ -519,9 +519,9 @@ impl<'bytes> Archive<'bytes> {
 
         if options.flags.directory_strings() {
             // bzstring -> include prefix byte and null terminator
-            // file_entries_offset += key.name.len() + 2;
+            // file_entries_offset += key.name().len() + 2;
             *file_entries_offset = file_entries_offset
-                .checked_add((key.name.len() + 2).try_into()?)
+                .checked_add((key.name().len() + 2).try_into()?)
                 .ok_or(Error::IntegralOverflow)?;
         }
 
@@ -563,7 +563,7 @@ impl<'bytes> Archive<'bytes> {
     fn write_file_entry<Out>(
         sink: &mut Sink<Out>,
         options: Options,
-        key: &DirectoryKey,
+        key: &DirectoryKey<'bytes>,
         file: &File<'bytes>,
         file_data_offset: &mut u32,
         embedded_file_name: Option<&BStr>,
@@ -571,7 +571,7 @@ impl<'bytes> Archive<'bytes> {
     where
         Out: Write,
     {
-        Self::write_hash(sink, options, key.hash.into())?;
+        Self::write_hash(sink, options, (*key.hash()).into())?;
 
         let (size_with_info, size) = {
             let mut size = file.len();
@@ -673,7 +673,7 @@ impl<'bytes> Archive<'bytes> {
         source: &mut In,
         header: &Header,
         offsets: &mut Offsets,
-    ) -> Result<(Key, Directory<'bytes>)>
+    ) -> Result<(Key<'bytes>, Directory<'bytes>)>
     where
         In: ?Sized + Source<'bytes>,
     {
@@ -686,8 +686,8 @@ impl<'bytes> Archive<'bytes> {
         }
 
         let mut map = DirectoryMap::default();
-        let (name, directory) =
-            source.save_restore_position(|source| -> Result<(BString, Directory<'bytes>)> {
+        let (name, directory) = source.save_restore_position(
+            |source| -> Result<(Bytes<'bytes>, Directory<'bytes>)> {
                 source.seek_absolute(offsets.file_entries)?;
                 let mut name = if header.archive_flags.directory_strings() {
                     Some(source.read_protocol::<BZString>(Endian::Little)?)
@@ -700,7 +700,8 @@ impl<'bytes> Archive<'bytes> {
                 }
                 offsets.file_entries = source.stream_position();
                 Ok((name.unwrap_or_default(), Directory { map }))
-            })??;
+            },
+        )??;
 
         Ok((
             Key {
@@ -715,8 +716,8 @@ impl<'bytes> Archive<'bytes> {
         source: &mut In,
         header: &Header,
         offsets: &mut Offsets,
-        directory_name: &mut Option<BString>,
-    ) -> Result<(DirectoryKey, File<'bytes>)>
+        directory_name: &mut Option<Bytes<'bytes>>,
+    ) -> Result<(DirectoryKey<'bytes>, File<'bytes>)>
     where
         In: ?Sized + Source<'bytes>,
     {
@@ -732,7 +733,7 @@ impl<'bytes> Archive<'bytes> {
         };
 
         let mut name = if header.archive_flags.file_strings() {
-            source.save_restore_position(|source| -> Result<Option<BString>> {
+            source.save_restore_position(|source| -> Result<Option<Bytes<'bytes>>> {
                 source.seek_absolute(offsets.file_names)?;
                 let result = source.read_protocol::<ZString>(Endian::Little)?;
                 offsets.file_names = source.stream_position();
@@ -750,11 +751,13 @@ impl<'bytes> Archive<'bytes> {
                     Version::v104 | Version::v105 if header.archive_flags.embedded_file_names() => {
                         let mut s = source.read_protocol::<protocols::BString>(Endian::Little)?;
                         data_size -= s.len() + 1; // include prefix byte
-                        if let Some(pos) = s.iter().rposition(|&x| x == b'\\' || x == b'/') {
+                        if let Some(pos) =
+                            s.as_bytes().iter().rposition(|&x| x == b'\\' || x == b'/')
+                        {
                             if directory_name.is_none() {
-                                *directory_name = Some(s[..pos].into());
+                                *directory_name = Some(s.copy_slice(0..pos));
                             }
-                            s.drain(..=pos);
+                            s = s.copy_slice(pos + 1..s.len());
                         }
                         if name.is_none() {
                             name = Some(s);
@@ -951,13 +954,13 @@ mod tests {
 
         assert_eq!(normal.len(), xbox.len());
         for (directory_normal, directory_xbox) in normal.iter().zip(xbox) {
-            assert_eq!(directory_normal.0.hash, directory_xbox.0.hash);
-            assert_eq!(directory_normal.0.name, directory_xbox.0.name);
+            assert_eq!(directory_normal.0.hash(), directory_xbox.0.hash());
+            assert_eq!(directory_normal.0.name(), directory_xbox.0.name());
             assert_eq!(directory_normal.1.len(), directory_xbox.1.len());
 
             for (file_normal, file_xbox) in directory_normal.1.iter().zip(directory_xbox.1) {
-                assert_eq!(file_normal.0.hash, file_xbox.0.hash);
-                assert_eq!(file_normal.0.name, file_xbox.0.name);
+                assert_eq!(file_normal.0.hash(), file_xbox.0.hash());
+                assert_eq!(file_normal.0.name(), file_xbox.0.name());
                 assert!(!file_normal.1.is_compressed());
                 assert!(!file_xbox.1.is_compressed());
                 assert_eq!(file_normal.1.len(), file_xbox.1.len());
@@ -1150,10 +1153,10 @@ mod tests {
                 let directory = child
                     .get_key_value(&archive_key)
                     .with_context(|| format!("failed to get directory: {}", info.directory.name))?;
-                assert_eq!(directory.0.hash.numeric(), info.directory.hash);
+                assert_eq!(directory.0.hash().numeric(), info.directory.hash);
                 assert_eq!(directory.1.len(), 1);
                 if flags.directory_strings() || embedded_file_names {
-                    assert_eq!(directory.0.name, archive_key.name);
+                    assert_eq!(directory.0.name(), archive_key.name());
                 }
 
                 let directory_key: DirectoryKey = info.file.name.into();
@@ -1161,9 +1164,9 @@ mod tests {
                     .1
                     .get_key_value(&directory_key)
                     .with_context(|| format!("failed to get file: {}", info.file.name))?;
-                assert_eq!(file.0.hash.numeric(), info.file.hash);
+                assert_eq!(file.0.hash().numeric(), info.file.hash);
                 if flags.file_strings() || embedded_file_names {
-                    assert_eq!(file.0.name, directory_key.name);
+                    assert_eq!(file.0.name(), directory_key.name());
                 }
 
                 let decompressed_file = if file.1.is_compressed() {
@@ -1263,13 +1266,13 @@ mod tests {
             let directory = archive
                 .get_key_value(&ArchiveKey::from(directory_name))
                 .with_context(|| format!("failed to get directory: {directory_name}"))?;
-            assert_eq!(directory.0.name, directory_name);
+            assert_eq!(directory.0.name(), directory_name);
 
             let file = directory
                 .1
                 .get_key_value(&DirectoryKey::from(file_name))
                 .with_context(|| format!("failed to get file: {file_name}"))?;
-            assert_eq!(file.0.name, file_name);
+            assert_eq!(file.0.name(), file_name);
 
             Ok(())
         };

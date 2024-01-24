@@ -31,14 +31,14 @@ pub(crate) trait Source<'bytes> {
 
     fn read<T>(&mut self, endian: Endian) -> io::Result<T>
     where
-        T: BinaryReadable<Item = T>,
+        T: BinaryReadable<'bytes, Item = T>,
     {
         T::from_stream(self, endian)
     }
 
     fn read_protocol<T>(&mut self, endian: Endian) -> io::Result<T::Item>
     where
-        T: BinaryReadable,
+        T: BinaryReadable<'bytes>,
     {
         T::from_stream(self, endian)
     }
@@ -183,31 +183,31 @@ impl TryFrom<&File> for MappedSource {
 
 make_sourceable!(MappedSource, 'static);
 
-pub(crate) trait BinaryReadable {
+pub(crate) trait BinaryReadable<'bytes> {
     type Item;
 
-    fn from_ne_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
+    fn from_ne_stream<In>(stream: &mut In) -> io::Result<Self::Item>
     where
         In: ?Sized + Source<'bytes>,
     {
         Self::from_stream(stream, Endian::Native)
     }
 
-    fn from_be_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
+    fn from_be_stream<In>(stream: &mut In) -> io::Result<Self::Item>
     where
         In: ?Sized + Source<'bytes>,
     {
         Self::from_stream(stream, Endian::Big)
     }
 
-    fn from_le_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
+    fn from_le_stream<In>(stream: &mut In) -> io::Result<Self::Item>
     where
         In: ?Sized + Source<'bytes>,
     {
         Self::from_stream(stream, Endian::Little)
     }
 
-    fn from_stream<'bytes, In>(stream: &mut In, endian: Endian) -> io::Result<Self::Item>
+    fn from_stream<In>(stream: &mut In, endian: Endian) -> io::Result<Self::Item>
     where
         In: ?Sized + Source<'bytes>,
     {
@@ -257,10 +257,10 @@ pub(crate) trait BinaryWriteable {
 
 macro_rules! make_binary_streamable {
     ($t:ty) => {
-        impl BinaryReadable for $t {
+        impl<'bytes> BinaryReadable<'bytes> for $t {
             type Item = $t;
 
-            fn from_be_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
+            fn from_be_stream<In>(stream: &mut In) -> io::Result<Self::Item>
             where
                 In: ?Sized + Source<'bytes>,
             {
@@ -269,7 +269,7 @@ macro_rules! make_binary_streamable {
                 Ok(Self::from_be_bytes(bytes))
             }
 
-            fn from_le_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
+            fn from_le_stream<In>(stream: &mut In) -> io::Result<Self::Item>
             where
                 In: ?Sized + Source<'bytes>,
             {
@@ -278,7 +278,7 @@ macro_rules! make_binary_streamable {
                 Ok(Self::from_le_bytes(bytes))
             }
 
-            fn from_ne_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
+            fn from_ne_stream<In>(stream: &mut In) -> io::Result<Self::Item>
             where
                 In: ?Sized + Source<'bytes>,
             {
@@ -330,13 +330,13 @@ make_binary_streamable!(i64);
 
 macro_rules! make_binary_streamable_tuple {
     ($($idx:tt $t:ident),+) => {
-        impl<$($t,)+> BinaryReadable for ($($t,)+)
+        impl<'bytes, $($t,)+> BinaryReadable<'bytes> for ($($t,)+)
         where
-            $($t: BinaryReadable,)+
+            $($t: BinaryReadable<'bytes>,)+
         {
             type Item = ($($t::Item,)+);
 
-            fn from_be_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
+            fn from_be_stream<In>(stream: &mut In) -> io::Result<Self::Item>
             where
                 In: ?Sized + Source<'bytes>,
             {
@@ -345,7 +345,7 @@ macro_rules! make_binary_streamable_tuple {
                 )+))
             }
 
-            fn from_le_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
+            fn from_le_stream<In>(stream: &mut In) -> io::Result<Self::Item>
             where
                 In: ?Sized + Source<'bytes>,
             {
@@ -354,7 +354,7 @@ macro_rules! make_binary_streamable_tuple {
                 )+))
             }
 
-            fn from_ne_stream<'bytes, In>(stream: &mut In) -> io::Result<Self::Item>
+            fn from_ne_stream<In>(stream: &mut In) -> io::Result<Self::Item>
             where
                 In: ?Sized + Source<'bytes>,
             {

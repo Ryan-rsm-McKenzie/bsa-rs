@@ -46,7 +46,7 @@ impl Header {
 
 derive::key!(Key: FileHash);
 
-impl Key {
+impl<'bytes> Key<'bytes> {
     #[must_use]
     fn hash_in_place(name: &mut BString) -> FileHash {
         tes3::hash_file_in_place(name)
@@ -78,7 +78,7 @@ impl<'bytes> Archive<'bytes> {
             file_count: self.map.len().try_into()?,
             hash_offset: {
                 let names_offset = 0xC * self.map.len();
-                let names_len: usize = self.map.keys().map(|x| x.name.len() + 1).sum();
+                let names_len: usize = self.map.keys().map(|x| x.name().len() + 1).sum();
                 (names_offset + names_len).try_into()?
             },
         })
@@ -114,7 +114,7 @@ impl<'bytes> Archive<'bytes> {
         Out: Write,
     {
         for key in self.map.keys() {
-            let hash = &key.hash;
+            let hash = &key.hash();
             sink.write(&(hash.lo, hash.hi), Endian::Little)?;
         }
 
@@ -143,7 +143,7 @@ impl<'bytes> Archive<'bytes> {
         let mut offset: u32 = 0;
         for key in self.map.keys() {
             sink.write(&offset, Endian::Little)?;
-            offset += u32::try_from(key.name.len() + 1)?;
+            offset += u32::try_from(key.name().len() + 1)?;
         }
 
         Ok(())
@@ -154,7 +154,7 @@ impl<'bytes> Archive<'bytes> {
         Out: Write,
     {
         for key in self.map.keys() {
-            sink.write_protocol::<ZString>(key.name.as_ref(), Endian::Little)?;
+            sink.write_protocol::<ZString>(key.name(), Endian::Little)?;
         }
 
         Ok(())
@@ -176,7 +176,11 @@ impl<'bytes> Archive<'bytes> {
         Ok(Self { map })
     }
 
-    fn read_file<In>(source: &mut In, idx: usize, offsets: &Offsets) -> Result<(Key, File<'bytes>)>
+    fn read_file<In>(
+        source: &mut In,
+        idx: usize,
+        offsets: &Offsets,
+    ) -> Result<(Key<'bytes>, File<'bytes>)>
     where
         In: ?Sized + Source<'bytes>,
     {
@@ -185,7 +189,7 @@ impl<'bytes> Archive<'bytes> {
             Self::read_hash(source)
         })??;
 
-        let name = source.save_restore_position(|source| -> Result<BString> {
+        let name = source.save_restore_position(|source| -> Result<Bytes<'bytes>> {
             source.seek_absolute(offsets.name_offsets + 0x4 * idx)?;
             let offset: u32 = source.read(Endian::Little)?;
             source.seek_absolute(offsets.names + offset as usize)?;
@@ -325,16 +329,16 @@ mod tests {
 
     #[test]
     fn writing() -> anyhow::Result<()> {
-        struct Info<'a> {
-            key: ArchiveKey,
-            path: &'a Path,
+        struct Info {
+            key: ArchiveKey<'static>,
+            path: &'static Path,
         }
 
-        impl<'a> Info<'a> {
-            fn new(lo: u32, hi: u32, path: &'a str) -> Self {
+        impl Info {
+            fn new(lo: u32, hi: u32, path: &'static str) -> Self {
                 let hash = Hash { lo, hi };
                 let key = ArchiveKey::from(path);
-                assert_eq!(hash, key.hash);
+                assert_eq!(&hash, key.hash());
                 Self {
                     key,
                     path: Path::new(path),
@@ -382,7 +386,7 @@ mod tests {
         let archive =
             Archive::read(Borrowed(&stream)).context("failed to read from archive in memory")?;
         for (data, info) in mmapped.iter().zip(&infos) {
-            let file = archive.get(&info.key.hash).with_context(|| {
+            let file = archive.get(info.key.hash()).with_context(|| {
                 format!("failed to get value from archive with key: {:?}", info.path)
             })?;
             assert_eq!(file.as_bytes(), &data[..]);

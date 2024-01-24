@@ -1,3 +1,4 @@
+use core::ops::Range;
 use memmap2::Mmap;
 use std::sync::Arc;
 
@@ -38,6 +39,12 @@ enum BytesInner<'bytes> {
 }
 
 use BytesInner::*;
+
+impl From<Mapping> for BytesInner<'static> {
+    fn from(value: Mapping) -> Self {
+        Mapped(value)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct Bytes<'bytes> {
@@ -115,6 +122,26 @@ impl<'bytes> Bytes<'bytes> {
             },
         }
     }
+
+    #[must_use]
+    pub(crate) fn copy_slice(&self, slice: Range<usize>) -> Self {
+        match &self.inner {
+            Owned(x) => Self {
+                inner: Owned(x[slice].into()),
+            },
+            Borrowed(x) => Self {
+                inner: Borrowed(&x[slice]),
+            },
+            Mapped(x) => Self {
+                inner: Mapping {
+                    pos: x.pos + slice.start,
+                    len: slice.len(),
+                    mapping: x.mapping.clone(),
+                }
+                .into(),
+            },
+        }
+    }
 }
 
 impl Bytes<'static> {
@@ -128,7 +155,7 @@ impl Bytes<'static> {
     #[must_use]
     pub(crate) fn from_mapped(pos: usize, len: usize, mapping: Arc<Mmap>) -> Self {
         Self {
-            inner: Mapped(Mapping { pos, len, mapping }),
+            inner: Mapping { pos, len, mapping }.into(),
         }
     }
 }

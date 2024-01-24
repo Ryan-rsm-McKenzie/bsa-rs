@@ -6,7 +6,7 @@ use bstr::BString;
 
 derive::key!(Key: FileHash);
 
-impl Key {
+impl<'bytes> Key<'bytes> {
     #[must_use]
     fn hash_in_place(name: &mut BString) -> FileHash {
         tes4::hash_file_in_place(name)

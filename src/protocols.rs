@@ -1,5 +1,9 @@
-use crate::io::{BinaryReadable, BinaryWriteable, Endian, Sink, Source};
-use bstr::{BStr as ByteStr, BString as ByteString};
+use crate::{
+    containers::Bytes,
+    io::{BinaryReadable, BinaryWriteable, Endian, Sink, Source},
+};
+use bstr::BStr as ByteStr;
+use core::num::NonZeroU8;
 use std::io::{self, Write};
 
 #[derive(Debug, thiserror::Error)]
@@ -19,19 +23,15 @@ impl From<Error> for io::Error {
 
 pub(crate) struct BString;
 
-impl BinaryReadable for BString {
-    type Item = ByteString;
+impl<'bytes> BinaryReadable<'bytes> for BString {
+    type Item = Bytes<'bytes>;
 
-    fn from_stream<'bytes, In>(stream: &mut In, endian: Endian) -> io::Result<Self::Item>
+    fn from_stream<In>(stream: &mut In, endian: Endian) -> io::Result<Self::Item>
     where
         In: ?Sized + Source<'bytes>,
     {
         let len: u8 = stream.read(endian)?;
-        let mut result = Vec::new();
-        result.resize_with(len.into(), Default::default);
-        stream.read_into(&mut result[..])?;
-        result.shrink_to_fit();
-        Ok(result.into())
+        stream.read_bytes(len.into())
     }
 }
 
@@ -56,24 +56,27 @@ impl BinaryWriteable for BString {
 
 pub(crate) struct ZString;
 
-impl BinaryReadable for ZString {
-    type Item = ByteString;
+impl<'bytes> BinaryReadable<'bytes> for ZString {
+    type Item = Bytes<'bytes>;
 
-    fn from_stream<'bytes, In>(stream: &mut In, endian: Endian) -> io::Result<Self::Item>
+    fn from_stream<In>(stream: &mut In, endian: Endian) -> io::Result<Self::Item>
     where
         In: ?Sized + Source<'bytes>,
     {
-        let mut result = Vec::new();
+        let start = stream.stream_position();
+        let mut len = 0;
         loop {
             let byte: u8 = stream.read(endian)?;
             match byte {
                 0 => break,
-                byte => result.push(byte),
+                _ => len += 1,
             };
         }
 
-        result.shrink_to_fit();
-        Ok(result.into())
+        stream.seek_absolute(start)?;
+        let result = stream.read_bytes(len)?;
+        stream.seek_relative(1)?; // skip null terminator
+        Ok(result)
     }
 }
 
@@ -92,27 +95,22 @@ impl BinaryWriteable for ZString {
 
 pub(crate) struct BZString;
 
-impl BinaryReadable for BZString {
-    type Item = ByteString;
+impl<'bytes> BinaryReadable<'bytes> for BZString {
+    type Item = Bytes<'bytes>;
 
-    fn from_stream<'bytes, In>(stream: &mut In, endian: Endian) -> io::Result<Self::Item>
+    fn from_stream<In>(stream: &mut In, endian: Endian) -> io::Result<Self::Item>
     where
         In: ?Sized + Source<'bytes>,
     {
         let len: u8 = stream.read(endian)?;
-        if len > 0 {
-            let mut result = Vec::new();
-            result.resize_with(len.into(), Default::default);
-            stream.read_into(&mut result[..])?;
-            match result.pop() {
-                Some(b'\0') => {
-                    result.shrink_to_fit();
-                    Ok(result.into())
-                }
-                _ => Err(Error::MissingNullTerminator.into()),
-            }
-        } else {
-            Ok(Self::Item::default())
+        let Some(len) = NonZeroU8::new(len) else {
+            return Err(Error::MissingNullTerminator.into());
+        };
+
+        let result = stream.read_bytes((len.get() - 1).into())?;
+        match stream.read(endian)? {
+            b'\0' => Ok(result),
+            _ => Err(Error::MissingNullTerminator.into()),
         }
     }
 }
@@ -139,19 +137,15 @@ impl BinaryWriteable for BZString {
 
 pub(crate) struct WString;
 
-impl BinaryReadable for WString {
-    type Item = ByteString;
+impl<'bytes> BinaryReadable<'bytes> for WString {
+    type Item = Bytes<'bytes>;
 
-    fn from_stream<'bytes, In>(stream: &mut In, endian: Endian) -> io::Result<Self::Item>
+    fn from_stream<In>(stream: &mut In, endian: Endian) -> io::Result<Self::Item>
     where
         In: ?Sized + Source<'bytes>,
     {
         let len: u16 = stream.read(endian)?;
-        let mut result = Vec::new();
-        result.resize_with(len.into(), Default::default);
-        stream.read_into(&mut result[..])?;
-        result.shrink_to_fit();
-        Ok(result.into())
+        stream.read_bytes(len.into())
     }
 }
 

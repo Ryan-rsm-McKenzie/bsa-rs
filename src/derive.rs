@@ -225,47 +225,72 @@ pub(crate) use compressable_bytes;
 macro_rules! key {
     ($this:ident: $hash:ident) => {
         #[derive(::core::clone::Clone, ::core::fmt::Debug, ::core::default::Default)]
-        pub struct $this {
-            pub hash: $hash,
-            pub name: ::bstr::BString,
+        pub struct $this<'bytes> {
+            pub(crate) hash: $hash,
+            pub(crate) name: crate::containers::Bytes<'bytes>,
+        }
+
+        impl<'bytes> $this<'bytes> {
+            #[must_use]
+            pub fn hash(&self) -> &$hash {
+                &self.hash
+            }
+
+            #[must_use]
+            pub fn name(&self) -> &::bstr::BStr {
+                ::bstr::BStr::new(self.name.as_bytes())
+            }
         }
 
         // false positive
         #[allow(clippy::unconditional_recursion)]
-        impl ::core::cmp::PartialEq for $this {
+        impl<'bytes> ::core::cmp::PartialEq for $this<'bytes> {
             fn eq(&self, other: &Self) -> bool {
                 self.hash.eq(&other.hash)
             }
         }
 
-        impl ::core::cmp::Eq for $this {}
+        impl<'bytes> ::core::cmp::Eq for $this<'bytes> {}
 
-        impl ::core::cmp::PartialOrd for $this {
+        impl<'bytes> ::core::cmp::PartialOrd for $this<'bytes> {
             fn partial_cmp(&self, other: &Self) -> ::core::option::Option<::core::cmp::Ordering> {
                 Some(self.cmp(other))
             }
         }
 
-        impl ::core::cmp::Ord for $this {
+        impl<'bytes> ::core::cmp::Ord for $this<'bytes> {
             fn cmp(&self, other: &Self) -> ::core::cmp::Ordering {
                 self.hash.cmp(&other.hash)
             }
         }
 
-        impl ::core::borrow::Borrow<$hash> for $this {
+        impl<'bytes> ::core::borrow::Borrow<$hash> for $this<'bytes> {
             fn borrow(&self) -> &$hash {
                 &self.hash
             }
         }
 
-        impl<T> ::core::convert::From<T> for $this
+        impl ::core::convert::From<$hash> for $this<'static> {
+            fn from(value: $hash) -> Self {
+                Self {
+                    hash: value,
+                    name: crate::containers::Bytes::default(),
+                }
+            }
+        }
+
+        impl<T> ::core::convert::From<T> for $this<'static>
         where
-            T: Into<::bstr::BString>,
+            T: ::core::convert::Into<::bstr::BString>,
         {
             fn from(value: T) -> Self {
                 let mut name = value.into();
                 let hash = Self::hash_in_place(&mut name);
-                Self { hash, name }
+                let v: Vec<u8> = name.into();
+                Self {
+                    hash,
+                    name: crate::containers::Bytes::from_owned(v.into()),
+                }
             }
         }
     };
@@ -275,7 +300,8 @@ pub(crate) use key;
 
 macro_rules! mapping {
     ($this:ident, $mapping:ident: ($key:ident: $hash:ident) => $value:ident) => {
-        pub(crate) type $mapping<'bytes> = ::std::collections::BTreeMap<$key, $value<'bytes>>;
+        pub(crate) type $mapping<'bytes> =
+            ::std::collections::BTreeMap<$key<'bytes>, $value<'bytes>>;
 
         impl<'bytes> crate::Sealed for $this<'bytes> {}
 
@@ -301,7 +327,7 @@ macro_rules! mapping {
             pub fn get_key_value<K>(
                 &self,
                 key: &K,
-            ) -> ::core::option::Option<(&$key, &$value<'bytes>)>
+            ) -> ::core::option::Option<(&$key<'bytes>, &$value<'bytes>)>
             where
                 K: ::core::borrow::Borrow<$hash>,
             {
@@ -322,7 +348,7 @@ macro_rules! mapping {
                 value: $value<'bytes>,
             ) -> ::core::option::Option<$value<'bytes>>
             where
-                K: ::core::convert::Into<$key>,
+                K: ::core::convert::Into<$key<'bytes>>,
             {
                 self.map.insert(key.into(), value)
             }
@@ -332,17 +358,19 @@ macro_rules! mapping {
                 self.map.is_empty()
             }
 
-            pub fn iter(&self) -> impl ::core::iter::Iterator<Item = (&$key, &$value<'bytes>)> {
+            pub fn iter(
+                &self,
+            ) -> impl ::core::iter::Iterator<Item = (&$key<'bytes>, &$value<'bytes>)> {
                 self.map.iter()
             }
 
             pub fn iter_mut(
                 &mut self,
-            ) -> impl ::core::iter::Iterator<Item = (&$key, &mut $value<'bytes>)> {
+            ) -> impl ::core::iter::Iterator<Item = (&$key<'bytes>, &mut $value<'bytes>)> {
                 self.map.iter_mut()
             }
 
-            pub fn keys(&self) -> impl ::core::iter::Iterator<Item = &$key> {
+            pub fn keys(&self) -> impl ::core::iter::Iterator<Item = &$key<'bytes>> {
                 self.map.keys()
             }
 
@@ -366,7 +394,7 @@ macro_rules! mapping {
             pub fn remove_entry<K>(
                 &mut self,
                 key: &K,
-            ) -> ::core::option::Option<($key, $value<'bytes>)>
+            ) -> ::core::option::Option<($key<'bytes>, $value<'bytes>)>
             where
                 K: ::core::borrow::Borrow<$hash>,
             {
@@ -384,10 +412,10 @@ macro_rules! mapping {
             }
         }
 
-        impl<'bytes> ::core::iter::FromIterator<($key, $value<'bytes>)> for $this<'bytes> {
+        impl<'bytes> ::core::iter::FromIterator<($key<'bytes>, $value<'bytes>)> for $this<'bytes> {
             fn from_iter<T>(iter: T) -> Self
             where
-                T: ::core::iter::IntoIterator<Item = ($key, $value<'bytes>)>,
+                T: ::core::iter::IntoIterator<Item = ($key<'bytes>, $value<'bytes>)>,
             {
                 Self {
                     map: iter.into_iter().collect(),
