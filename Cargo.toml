@@ -11,7 +11,7 @@ include = [
 ]
 keywords = ["archive", "ba2", "bethesda", "bgs", "bsa"]
 license = "0BSD"
-name = "bsa"
+name = "ba2"
 readme = "README.md"
 repository = "https://github.com/Ryan-rsm-McKenzie/bsa-rs"
 version = "1.0.0"
