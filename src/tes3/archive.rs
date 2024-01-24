@@ -53,7 +53,7 @@ impl Key {
     }
 }
 
-type ReadResult<T> = (T,);
+type ReadResult<T> = T;
 derive::archive!(Archive => ReadResult, Map: (Key: FileHash) => File);
 
 impl<'bytes> Archive<'bytes> {
@@ -173,7 +173,7 @@ impl<'bytes> Archive<'bytes> {
             map.insert(key, value);
         }
 
-        Ok((Self { map },))
+        Ok(Self { map })
     }
 
     fn read_file<In>(source: &mut In, idx: usize, offsets: &Offsets) -> Result<(Key, File<'bytes>)>
@@ -284,7 +284,7 @@ mod tests {
     #[test]
     fn reading() -> anyhow::Result<()> {
         let root_path = Path::new("data/tes3_read_test/");
-        let (archive,) = {
+        let archive = {
             let archive_path = root_path.join("test.bsa");
             Archive::read(archive_path.as_path())
                 .with_context(|| format!("failed to read from archive: {archive_path:?}"))?
@@ -379,7 +379,7 @@ mod tests {
             result
         };
 
-        let (archive,) =
+        let archive =
             Archive::read(Borrowed(&stream)).context("failed to read from archive in memory")?;
         for (data, info) in mmapped.iter().zip(&infos) {
             let file = archive.get(&info.key.hash).with_context(|| {
