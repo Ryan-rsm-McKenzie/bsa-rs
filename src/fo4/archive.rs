@@ -525,8 +525,8 @@ mod tests {
     use crate::{
         cc,
         fo4::{
-            Archive, ArchiveKey, ArchiveOptions, ChunkExtra, CompressionFormat, File, FileHeader,
-            Format, Version,
+            Archive, ArchiveKey, ArchiveOptions, ChunkExtra, CompressionFormat, Error, File,
+            FileHeader, Format, Version,
         },
         prelude::*,
         Borrowed,
@@ -536,7 +536,7 @@ mod tests {
     use memmap2::Mmap;
     use std::{
         ffi::OsString,
-        fs,
+        fs, io,
         path::{Path, PathBuf},
         str::FromStr as _,
     };
@@ -616,6 +616,69 @@ mod tests {
         assert_eq!(original.len(), copy.len());
         assert_eq!(&original[..], copy);
         Ok(())
+    }
+
+    #[test]
+    fn invalid_exhausted() -> anyhow::Result<()> {
+        let path = Path::new("data/fo4_invalid_test/invalid_exhausted.ba2");
+        match Archive::read(path) {
+            Err(Error::Io(error)) => {
+                assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+                Ok(())
+            }
+            Err(err) => Err(err.into()),
+            Ok(_) => anyhow::bail!("read should have failed"),
+        }
+    }
+
+    #[test]
+    fn invalid_format() -> anyhow::Result<()> {
+        let path = Path::new("data/fo4_invalid_test/invalid_format.ba2");
+        match Archive::read(path) {
+            Err(Error::InvalidFormat(x)) if x == cc::make_four(b"BLAH") => Ok(()),
+            Err(err) => Err(anyhow::Error::from(err)),
+            Ok(_) => anyhow::bail!("read should have failed"),
+        }
+    }
+
+    #[test]
+    fn invalid_magic() -> anyhow::Result<()> {
+        let path = Path::new("data/fo4_invalid_test/invalid_magic.ba2");
+        match Archive::read(path) {
+            Err(Error::InvalidMagic(x)) if x == cc::make_four(b"BLAH") => Ok(()),
+            Err(err) => Err(anyhow::Error::from(err)),
+            Ok(_) => anyhow::bail!("read should have failed"),
+        }
+    }
+
+    #[test]
+    fn invalid_sentinel() -> anyhow::Result<()> {
+        let path = Path::new("data/fo4_invalid_test/invalid_sentinel.ba2");
+        match Archive::read(path) {
+            Err(Error::InvalidChunkSentinel(0xDEADBEEF)) => Ok(()),
+            Err(err) => Err(anyhow::Error::from(err)),
+            Ok(_) => anyhow::bail!("read should have failed"),
+        }
+    }
+
+    #[test]
+    fn invalid_size() -> anyhow::Result<()> {
+        let path = Path::new("data/fo4_invalid_test/invalid_size.ba2");
+        match Archive::read(path) {
+            Err(Error::InvalidChunkSize(0xCCCC)) => Ok(()),
+            Err(err) => Err(anyhow::Error::from(err)),
+            Ok(_) => anyhow::bail!("read should have failed"),
+        }
+    }
+
+    #[test]
+    fn invalid_version() -> anyhow::Result<()> {
+        let path = Path::new("data/fo4_invalid_test/invalid_version.ba2");
+        match Archive::read(path) {
+            Err(Error::InvalidVersion(0x101)) => Ok(()),
+            Err(err) => Err(anyhow::Error::from(err)),
+            Ok(_) => anyhow::bail!("read should have failed"),
+        }
     }
 
     #[test]
