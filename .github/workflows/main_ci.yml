@@ -9,7 +9,6 @@ on:
       - 'src/*'
       - 'Cargo.lock'
       - 'Cargo.toml'
-      - 'deny.toml'
   pull_request:
     branches: ['main']
   workflow_dispatch:
