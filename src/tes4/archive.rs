@@ -797,23 +797,20 @@ impl<'bytes> Archive<'bytes> {
             source.save_restore_position(|source| -> Result<CompressableBytes<'bytes>> {
                 source.seek_absolute(data_offset)?;
 
-                match header.version {
-                    Version::v104 | Version::v105 if header.archive_flags.embedded_file_names() => {
-                        let mut s = source.read_protocol::<protocols::BString>(Endian::Little)?;
-                        data_size -= s.len() + 1; // include prefix byte
-                        if let Some(pos) =
-                            s.as_bytes().iter().rposition(|&x| x == b'\\' || x == b'/')
-                        {
-                            if directory_name.is_none() {
-                                *directory_name = Some(s.copy_slice(0..pos));
-                            }
-                            s = s.copy_slice(pos + 1..s.len());
+                if matches!(header.version,
+                    Version::v104 | Version::v105 if header.archive_flags.embedded_file_names())
+                {
+                    let mut s = source.read_protocol::<protocols::BString>(Endian::Little)?;
+                    data_size -= s.len() + 1; // include prefix byte
+                    if let Some(pos) = s.as_bytes().iter().rposition(|&x| x == b'\\' || x == b'/') {
+                        if directory_name.is_none() {
+                            *directory_name = Some(s.copy_slice(0..pos));
                         }
-                        if name.is_none() {
-                            name = Some(s);
-                        }
+                        s = s.copy_slice(pos + 1..s.len());
                     }
-                    _ => (),
+                    if name.is_none() {
+                        name = Some(s);
+                    }
                 }
 
                 let decompressed_len =
