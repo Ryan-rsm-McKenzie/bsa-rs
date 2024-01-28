@@ -38,14 +38,14 @@ impl<'bytes> BinaryReadable<'bytes> for BString {
 impl BinaryWriteable for BString {
     type Item = ByteStr;
 
-    fn to_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item, _: Endian) -> io::Result<()>
+    fn to_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item, endian: Endian) -> io::Result<()>
     where
         Out: Write,
     {
         let len: Result<u8, _> = item.len().try_into();
         match len {
             Ok(len) => {
-                stream.write_bytes(&len.to_ne_bytes())?;
+                stream.write(&len, endian)?;
                 stream.write_bytes(item)?;
                 Ok(())
             }
@@ -118,14 +118,14 @@ impl<'bytes> BinaryReadable<'bytes> for BZString {
 impl BinaryWriteable for BZString {
     type Item = ByteStr;
 
-    fn to_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item, _: Endian) -> io::Result<()>
+    fn to_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item, endian: Endian) -> io::Result<()>
     where
         Out: Write,
     {
         let len: Result<u8, _> = (item.len() + 1).try_into();
         match len {
             Ok(len) => {
-                stream.write_bytes(&len.to_ne_bytes())?;
+                stream.write(&len, endian)?;
                 stream.write_bytes(item)?;
                 stream.write_bytes(b"\0")?;
                 Ok(())
