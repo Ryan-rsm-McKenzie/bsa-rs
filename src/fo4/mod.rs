@@ -1,3 +1,51 @@
+//! Fallout 4
+//!
+//! *"Good morning! Vault-Tec calling! ... You can't begin to know how happy I am to finally speak with you. I've been trying for days. It's a matter of utmost urgency, I assure you."*
+//!
+//! This format is the latest iteration, having debuted with Fallout 4. It primarily uses zlib for compression, but Starfield has introduced lz4 into the mix. Unlike previous formats, texture files are now split into chunks to enable streaming mips at a more granular level.
+//!
+//! # Reading
+//! ```rust
+//! use ba2::{
+//!     fo4::{Archive, ArchiveKey, FileWriteOptions},
+//!     prelude::*,
+//! };
+//! use std::{fs, path::Path};
+//!
+//! fn example() -> Option<()> {
+//!     let path = Path::new(r"path/to/fallout4/Data/Fallout4 - Interface.ba2");
+//!     let (archive, meta) = Archive::read(path).ok()?;
+//!     let key: ArchiveKey = b"Interface/HUDMenu.swf".into();
+//!     let file = archive.get(&key)?;
+//!     let mut dst = fs::File::create("HUDMenu.swf").ok()?;
+//!     let options = FileWriteOptions::builder()
+//!         .compression_format(meta.compression_format())
+//!         .build();
+//!     file.write(&mut dst, &options).ok()?;
+//!     Some(())
+//! }
+//! ```
+//!
+//! # Writing
+//! ```rust
+//! use ba2::{
+//!     fo4::{Archive, ArchiveKey, ArchiveOptions, Chunk, File},
+//!     prelude::*,
+//! };
+//! use std::fs;
+//!
+//! fn example() -> Option<()> {
+//!     let chunk = Chunk::from_decompressed(b"Hello world!\n");
+//!     let file: File = [chunk].into_iter().collect();
+//!     let key: ArchiveKey = b"hello.txt".into();
+//!     let archive: Archive = [(key, file)].into_iter().collect();
+//!     let mut dst = fs::File::create("example.ba2").ok()?;
+//!     let options = ArchiveOptions::default();
+//!     archive.write(&mut dst, &options).ok()?;
+//!     Some(())
+//! }
+//! ```
+
 mod archive;
 mod chunk;
 mod file;

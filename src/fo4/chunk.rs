@@ -39,6 +39,34 @@ impl CompressionOptionsBuilder {
     }
 }
 
+/// Common parameters to configure how chunks are compressed.
+///
+/// ```rust
+/// use ba2::fo4::{ChunkCompressionOptions, CompressionFormat, CompressionLevel};
+///
+/// // Configure for FO4/FO76
+/// let _ = ChunkCompressionOptions::builder()
+///     .compression_format(CompressionFormat::Zip)
+///     .compression_level(CompressionLevel::FO4)
+///     .build();
+///
+/// // Configure for FO4 on the xbox
+/// let _ = ChunkCompressionOptions::builder()
+///     .compression_format(CompressionFormat::Zip)
+///     .compression_level(CompressionLevel::FO4Xbox)
+///     .build();
+///
+/// // Configure for SF, GNRL format
+/// let _ = ChunkCompressionOptions::builder()
+///     .compression_format(CompressionFormat::Zip)
+///     .compression_level(CompressionLevel::SF)
+///     .build();
+///
+/// // Configure for SF, DX10 format
+/// let _ = ChunkCompressionOptions::builder()
+///     .compression_format(CompressionFormat::LZ4)
+///     .build();
+/// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CompressionOptions {
     pub(crate) compression_format: CompressionFormat,

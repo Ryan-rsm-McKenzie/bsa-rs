@@ -1,3 +1,5 @@
+//! Archives come in various flavors, and the specific variant you'll need to use depends on which game you're working with. Learn more by choosing one of [`tes3`], [`tes4`], or [`fo4`].
+
 #![warn(
     clippy::pedantic,
     clippy::single_char_lifetime_names,

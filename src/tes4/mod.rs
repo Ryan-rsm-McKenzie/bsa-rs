@@ -1,3 +1,62 @@
+//! TES IV: Oblivion
+//!
+//! *"You ... I've seen you... Let me see your face... You are the one from my dreams... Then the stars were right, and this is the day. Gods give me strength."*
+//!
+//! This format debuted with Oblivion and sunset with Skyrim: SSE. This is the first format to introduce compression, and primarily utilizes zlib/lz4 for this purpose. Unlike other formats, [`tes4`](crate::tes4) utilizes a split architecture where files and directories are tracked as separate paths, rather than combined.
+//!
+//! # Reading
+//! ```rust
+//! use ba2::{
+//!     prelude::*,
+//!     tes4::{Archive, ArchiveKey, DirectoryKey, FileCompressionOptions},
+//! };
+//! use std::{fs, path::Path};
+//!
+//! fn example() -> Option<()> {
+//!     let path = Path::new("path/to/oblivion/Data/Oblivion - Voices2.bsa");
+//!     let (archive, meta) = Archive::read(path).ok()?;
+//!     let file = archive
+//!         .get(&ArchiveKey::from(b"sound/voice/oblivion.esm/imperial/m"))?
+//!         .get(&DirectoryKey::from(
+//!             b"testtoddquest_testtoddhappy_00027fa2_1.mp3",
+//!         ))?;
+//!     let mut dst = fs::File::create("happy.mp3").ok()?;
+//!     let options = FileCompressionOptions::builder()
+//!         .version(meta.version())
+//!         .build();
+//!     file.write(&mut dst, &options).ok()?;
+//!     Some(())
+//! }
+//! ```
+//!
+//! # Writing
+//! ```rust
+//! use ba2::{
+//!     prelude::*,
+//!     tes4::{
+//!         Archive, ArchiveKey, ArchiveOptions, ArchiveTypes, Directory, DirectoryKey, File, Version,
+//!     },
+//! };
+//! use std::fs;
+//!
+//! fn example() -> Option<()> {
+//!     let file = File::from_decompressed(b"Hello world!\n");
+//!     let directory: Directory = [(DirectoryKey::from(b"hello.txt"), file)]
+//!         .into_iter()
+//!         .collect();
+//!     let archive: Archive = [(ArchiveKey::from(b"misc"), directory)]
+//!         .into_iter()
+//!         .collect();
+//!     let mut dst = fs::File::create("example.bsa").ok()?;
+//!     let options = ArchiveOptions::builder()
+//!         .types(ArchiveTypes::MISC)
+//!         .version(Version::SSE)
+//!         .build();
+//!     archive.write(&mut dst, &options).ok()?;
+//!     Some(())
+//! }
+//! ```
+
 mod archive;
 mod directory;
 mod file;

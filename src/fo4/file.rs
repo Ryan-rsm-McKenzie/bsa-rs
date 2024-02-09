@@ -96,6 +96,61 @@ impl ReadOptionsBuilder {
     }
 }
 
+/// Common parameters to configure how files are read.
+///
+/// ```rust
+/// use ba2::{
+///     fo4::{CompressionFormat, CompressionLevel, FileReadOptions, Format},
+///     CompressionResult,
+/// };
+///
+/// // Read and compress a file for FO4/FO76, GNRL format
+/// let _ = FileReadOptions::builder()
+///     .format(Format::GNRL)
+///     .compression_format(CompressionFormat::Zip)
+///     .compression_level(CompressionLevel::FO4)
+///     .compression_result(CompressionResult::Compressed)
+///     .build();
+///
+/// // Read and compress a file for FO4/FO76, DX10 format
+/// let _ = FileReadOptions::builder()
+///     .format(Format::DX10)
+///     .compression_format(CompressionFormat::Zip)
+///     .compression_level(CompressionLevel::FO4)
+///     .compression_result(CompressionResult::Compressed)
+///     .build();
+///
+/// // Read and compress a file for FO4 on the xbox, GNRL format
+/// let _ = FileReadOptions::builder()
+///     .format(Format::GNRL)
+///     .compression_format(CompressionFormat::Zip)
+///     .compression_level(CompressionLevel::FO4Xbox)
+///     .compression_result(CompressionResult::Compressed)
+///     .build();
+///
+/// // Read and compress a file for FO4 on the xbox, DX10 format
+/// let _ = FileReadOptions::builder()
+///     .format(Format::DX10)
+///     .compression_format(CompressionFormat::Zip)
+///     .compression_level(CompressionLevel::FO4Xbox)
+///     .compression_result(CompressionResult::Compressed)
+///     .build();
+///
+/// // Read and compress a file for SF, GNRL format
+/// let _ = FileReadOptions::builder()
+///     .format(Format::GNRL)
+///     .compression_format(CompressionFormat::Zip)
+///     .compression_level(CompressionLevel::SF)
+///     .compression_result(CompressionResult::Compressed)
+///     .build();
+///
+/// // Read and compress a file for SF, DX10 format
+/// let _ = FileReadOptions::builder()
+///     .format(Format::DX10)
+///     .compression_format(CompressionFormat::LZ4)
+///     .compression_result(CompressionResult::Compressed)
+///     .build();
+/// ```
 #[derive(Clone, Copy, Debug)]
 pub struct ReadOptions {
     format: Format,
@@ -176,6 +231,26 @@ impl WriteOptionsBuilder {
     }
 }
 
+/// Common parameters to configure how files are written.
+///
+/// ```rust
+/// use ba2::fo4::{CompressionFormat, FileWriteOptions, Format};
+///
+/// // Write a file for FO4/FO76
+/// let _ = FileWriteOptions::builder()
+///     .compression_format(CompressionFormat::Zip)
+///     .build();
+///
+/// // Write a file for SF, GNRL format
+/// let _ = FileWriteOptions::builder()
+///     .compression_format(CompressionFormat::Zip)
+///     .build();
+///
+/// // Write a file for SF, DX10 format
+/// let _ = FileWriteOptions::builder()
+///     .compression_format(CompressionFormat::LZ4)
+///     .build();
+/// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WriteOptions {
     compression_format: CompressionFormat,

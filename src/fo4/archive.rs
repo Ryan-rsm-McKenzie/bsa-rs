@@ -117,6 +117,39 @@ impl OptionsBuilder {
     }
 }
 
+/// Info about the contents of the given archive.
+///
+/// ```rust
+/// use ba2::fo4::{ArchiveOptions, CompressionFormat, Format, Version};
+///
+/// // Write an archive for FO4/FO76, GNRL format
+/// let _ = ArchiveOptions::builder()
+///     .format(Format::GNRL)
+///     .version(Version::v1)
+///     .compression_format(CompressionFormat::Zip)
+///     .build();
+///
+/// // Write an archive for FO4/FO76, DX10 format
+/// let _ = ArchiveOptions::builder()
+///     .format(Format::DX10)
+///     .version(Version::v1)
+///     .compression_format(CompressionFormat::Zip)
+///     .build();
+///
+/// // Write an archive for SF, GNRL format
+/// let _ = ArchiveOptions::builder()
+///     .format(Format::GNRL)
+///     .version(Version::v2)
+///     .compression_format(CompressionFormat::Zip)
+///     .build();
+///
+/// // Write an archive for SF, DX10 format
+/// let _ = ArchiveOptions::builder()
+///     .format(Format::DX10)
+///     .version(Version::v3)
+///     .compression_format(CompressionFormat::LZ4)
+///     .build();
+/// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Options {
     format: Format,

@@ -40,6 +40,26 @@ impl CompressionOptionsBuilder {
     }
 }
 
+/// Common parameters to configure how files are compressed/decompressed.
+///
+/// ```rust
+/// use ba2::tes4::{FileCompressionOptions, Version};
+///
+/// // Configure for TES:IV
+/// let _ = FileCompressionOptions::builder()
+///     .version(Version::TES4)
+///     .build();
+///
+/// // Configure for F3/FNV/TES:V
+/// let _ = FileCompressionOptions::builder()
+///     .version(Version::FO3)
+///     .build();
+///
+/// // Configure for SSE
+/// let _ = FileCompressionOptions::builder()
+///     .version(Version::SSE)
+///     .build();
+/// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CompressionOptions {
     version: Version,
@@ -97,6 +117,32 @@ impl ReadOptionsBuilder {
     }
 }
 
+/// Common parameters to configure how files are read.
+///
+/// ```rust
+/// use ba2::{
+///     tes4::{FileReadOptions, Version},
+///     CompressionResult,
+/// };
+///
+/// // Read and compress a file for TES:IV
+/// let _ = FileReadOptions::builder()
+///     .version(Version::TES4)
+///     .compression_result(CompressionResult::Compressed)
+///     .build();
+///
+/// // Read and compress a file for F3/FNV/TES:V
+/// let _ = FileReadOptions::builder()
+///     .version(Version::FO3)
+///     .compression_result(CompressionResult::Compressed)
+///     .build();
+///
+/// // Read and compress a file for SSE
+/// let _ = FileReadOptions::builder()
+///     .version(Version::SSE)
+///     .compression_result(CompressionResult::Compressed)
+///     .build();
+/// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ReadOptions {
     compression_options: CompressionOptions,
