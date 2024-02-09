@@ -25,4 +25,4 @@ jobs:
         with:
           force_orphan: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ${{ github.workspace }}/target/doc/ba2/
+          publish_dir: ${{ github.workspace }}/target/doc/
