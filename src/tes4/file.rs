@@ -1,6 +1,7 @@
 use crate::{
     containers::CompressableBytes,
     derive,
+    io::Source,
     tes4::{CompressionCodec, Error, Result, Version},
     CompressionResult,
 };
@@ -208,7 +209,7 @@ impl<'bytes> File<'bytes> {
     #[allow(clippy::trivially_copy_pass_by_ref)]
     fn do_read<In>(stream: &mut In, options: &ReadOptions) -> Result<ReadResult<Self>>
     where
-        In: ?::core::marker::Sized + crate::io::Source<'bytes>,
+        In: ?Sized + Source<'bytes>,
     {
         let decompressed = Self {
             bytes: stream.read_bytes_to_end().into_compressable(None),
