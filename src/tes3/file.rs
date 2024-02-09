@@ -36,6 +36,12 @@ impl<'bytes> File<'bytes> {
     }
 }
 
+impl<'bytes, const N: usize> From<&'bytes [u8; N]> for File<'bytes> {
+    fn from(value: &'bytes [u8; N]) -> Self {
+        Self::from(value.as_slice())
+    }
+}
+
 impl<'bytes> From<&'bytes [u8]> for File<'bytes> {
     fn from(value: &'bytes [u8]) -> Self {
         Self {

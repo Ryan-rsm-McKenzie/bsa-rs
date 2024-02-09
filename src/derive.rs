@@ -193,6 +193,17 @@ macro_rules! compressable_bytes {
         }
 
         #[allow(clippy::needless_update)]
+        impl<'bytes, const N: usize> crate::CompressableFrom<&'bytes [u8; N]> for $this<'bytes> {
+            fn from_compressed(value: &'bytes [u8; N], decompressed_len: usize) -> Self {
+                Self::from_compressed(value.as_slice(), decompressed_len)
+            }
+
+            fn from_decompressed(value: &'bytes [u8; N]) -> Self {
+                Self::from_decompressed(value.as_slice())
+            }
+        }
+
+        #[allow(clippy::needless_update)]
         impl<'bytes> crate::CompressableFrom<&'bytes [u8]> for $this<'bytes> {
             fn from_compressed(value: &'bytes [u8], decompressed_len: usize) -> Self {
                 Self {
