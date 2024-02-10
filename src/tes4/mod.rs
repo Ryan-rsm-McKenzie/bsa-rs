@@ -21,9 +21,7 @@
 //!             b"testtoddquest_testtoddhappy_00027fa2_1.mp3",
 //!         ))?;
 //!     let mut dst = fs::File::create("happy.mp3").ok()?;
-//!     let options = FileCompressionOptions::builder()
-//!         .version(meta.version())
-//!         .build();
+//!     let options: FileCompressionOptions = meta.into();
 //!     file.write(&mut dst, &options).ok()?;
 //!     Some(())
 //! }

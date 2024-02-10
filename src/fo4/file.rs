@@ -2,8 +2,8 @@ use crate::{
     containers::CompressableBytes,
     derive,
     fo4::{
-        Chunk, ChunkCompressionOptions, ChunkDX10, ChunkExtra, CompressionFormat, CompressionLevel,
-        Error, Format, Result,
+        ArchiveOptions, Chunk, ChunkCompressionOptions, ChunkDX10, ChunkExtra, CompressionFormat,
+        CompressionLevel, Error, Format, Result,
     },
     io::Source,
     CompressionResult, Sealed,
@@ -93,6 +93,18 @@ impl ReadOptionsBuilder {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+}
+
+impl From<ArchiveOptions> for ReadOptionsBuilder {
+    fn from(value: ArchiveOptions) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&ArchiveOptions> for ReadOptionsBuilder {
+    fn from(value: &ArchiveOptions) -> Self {
+        Self(value.into())
     }
 }
 
@@ -209,6 +221,22 @@ impl Default for ReadOptions {
     }
 }
 
+impl From<ArchiveOptions> for ReadOptions {
+    fn from(value: ArchiveOptions) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&ArchiveOptions> for ReadOptions {
+    fn from(value: &ArchiveOptions) -> Self {
+        Self {
+            format: value.format(),
+            compression_options: value.into(),
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 #[repr(transparent)]
 pub struct WriteOptionsBuilder(WriteOptions);
@@ -228,6 +256,18 @@ impl WriteOptionsBuilder {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+}
+
+impl From<ArchiveOptions> for WriteOptionsBuilder {
+    fn from(value: ArchiveOptions) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&ArchiveOptions> for WriteOptionsBuilder {
+    fn from(value: &ArchiveOptions) -> Self {
+        Self(value.into())
     }
 }
 
@@ -265,6 +305,20 @@ impl WriteOptions {
     #[must_use]
     pub fn compression_format(&self) -> CompressionFormat {
         self.compression_format
+    }
+}
+
+impl From<ArchiveOptions> for WriteOptions {
+    fn from(value: ArchiveOptions) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&ArchiveOptions> for WriteOptions {
+    fn from(value: &ArchiveOptions) -> Self {
+        Self {
+            compression_format: value.compression_format(),
+        }
     }
 }
 

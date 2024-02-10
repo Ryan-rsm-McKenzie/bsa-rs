@@ -2,7 +2,7 @@ use crate::{
     containers::CompressableBytes,
     derive,
     io::Source,
-    tes4::{CompressionCodec, Error, Result, Version},
+    tes4::{ArchiveOptions, CompressionCodec, Error, Result, Version},
     CompressionResult,
 };
 use flate2::{
@@ -37,6 +37,18 @@ impl CompressionOptionsBuilder {
     pub fn version(mut self, version: Version) -> Self {
         self.0.version = version;
         self
+    }
+}
+
+impl From<ArchiveOptions> for CompressionOptionsBuilder {
+    fn from(value: ArchiveOptions) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&ArchiveOptions> for CompressionOptionsBuilder {
+    fn from(value: &ArchiveOptions) -> Self {
+        Self(value.into())
     }
 }
 
@@ -83,6 +95,21 @@ impl CompressionOptions {
     }
 }
 
+impl From<ArchiveOptions> for CompressionOptions {
+    fn from(value: ArchiveOptions) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&ArchiveOptions> for CompressionOptions {
+    fn from(value: &ArchiveOptions) -> Self {
+        Self {
+            version: value.version(),
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 #[repr(transparent)]
 pub struct ReadOptionsBuilder(ReadOptions);
@@ -114,6 +141,18 @@ impl ReadOptionsBuilder {
     pub fn version(mut self, version: Version) -> Self {
         self.0.compression_options.version = version;
         self
+    }
+}
+
+impl From<ArchiveOptions> for ReadOptionsBuilder {
+    fn from(value: ArchiveOptions) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&ArchiveOptions> for ReadOptionsBuilder {
+    fn from(value: &ArchiveOptions) -> Self {
+        Self(value.into())
     }
 }
 
@@ -168,6 +207,21 @@ impl ReadOptions {
     #[must_use]
     pub fn version(&self) -> Version {
         self.compression_options.version
+    }
+}
+
+impl From<ArchiveOptions> for ReadOptions {
+    fn from(value: ArchiveOptions) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&ArchiveOptions> for ReadOptions {
+    fn from(value: &ArchiveOptions) -> Self {
+        Self {
+            compression_options: value.into(),
+            ..Default::default()
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::{
     containers::CompressableBytes,
     derive,
-    fo4::{CompressionFormat, CompressionLevel, Error, Result},
+    fo4::{ArchiveOptions, CompressionFormat, CompressionLevel, Error, Result},
 };
 use core::ops::RangeInclusive;
 use flate2::{
@@ -36,6 +36,18 @@ impl CompressionOptionsBuilder {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+}
+
+impl From<ArchiveOptions> for CompressionOptionsBuilder {
+    fn from(value: ArchiveOptions) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&ArchiveOptions> for CompressionOptionsBuilder {
+    fn from(value: &ArchiveOptions) -> Self {
+        Self(value.into())
     }
 }
 
@@ -87,6 +99,21 @@ impl CompressionOptions {
     #[must_use]
     pub fn compression_level(&self) -> CompressionLevel {
         self.compression_level
+    }
+}
+
+impl From<ArchiveOptions> for CompressionOptions {
+    fn from(value: ArchiveOptions) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&ArchiveOptions> for CompressionOptions {
+    fn from(value: &ArchiveOptions) -> Self {
+        Self {
+            compression_format: value.compression_format(),
+            ..Default::default()
+        }
     }
 }
 

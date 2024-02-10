@@ -18,9 +18,7 @@
 //!     let key: ArchiveKey = b"Interface/HUDMenu.swf".into();
 //!     let file = archive.get(&key)?;
 //!     let mut dst = fs::File::create("HUDMenu.swf").ok()?;
-//!     let options = FileWriteOptions::builder()
-//!         .compression_format(meta.compression_format())
-//!         .build();
+//!     let options: FileWriteOptions = meta.into();
 //!     file.write(&mut dst, &options).ok()?;
 //!     Some(())
 //! }
