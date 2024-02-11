@@ -298,6 +298,7 @@ impl<'bytes> Key<'bytes> {
     }
 }
 
+/// See also [`ArchiveOptions`](Options).
 #[derive(Debug, Default)]
 #[repr(transparent)]
 pub struct OptionsBuilder(Options);

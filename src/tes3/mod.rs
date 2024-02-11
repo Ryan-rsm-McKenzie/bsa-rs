@@ -1,3 +1,5 @@
+#![doc(alias = "morrowind")]
+
 //! TES III: Morrowind
 //!
 //!  *"Ahh yes, we've been expecting you. You'll have to be recorded before you're officially released. There are a few ways we can do this, and the choice is yours."*

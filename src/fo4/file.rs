@@ -18,6 +18,7 @@ use core::{
 use directxtex::{ScratchImage, TexMetadata, CP_FLAGS, DDS_FLAGS, TEX_DIMENSION, TEX_MISC_FLAG};
 use std::{error, io::Write};
 
+/// File is at chunk capacity.
 pub struct CapacityError<'bytes>(Chunk<'bytes>);
 
 impl<'bytes> CapacityError<'bytes> {
@@ -44,6 +45,7 @@ impl<'bytes> Display for CapacityError<'bytes> {
 
 impl<'bytes> error::Error for CapacityError<'bytes> {}
 
+/// See also [`FileReadOptions`](ReadOptions).
 #[derive(Debug, Default)]
 #[repr(transparent)]
 pub struct ReadOptionsBuilder(ReadOptions);
@@ -237,6 +239,7 @@ impl From<&ArchiveOptions> for ReadOptions {
     }
 }
 
+/// See also [`FileWriteOptions`](WriteOptions).
 #[derive(Debug, Default)]
 #[repr(transparent)]
 pub struct WriteOptionsBuilder(WriteOptions);

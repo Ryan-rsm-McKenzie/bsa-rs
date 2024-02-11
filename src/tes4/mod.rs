@@ -1,3 +1,14 @@
+#![doc(alias = "oblivion")]
+#![doc(alias = "fallout 3")]
+#![doc(alias = "fo3")]
+#![doc(alias = "fallout new vegas")]
+#![doc(alias = "new vegas")]
+#![doc(alias = "fnv")]
+#![doc(alias = "tes5")]
+#![doc(alias = "skyrim")]
+#![doc(alias = "sse")]
+#![doc(alias = "special edition")]
+
 //! TES IV: Oblivion
 //!
 //! *"You ... I've seen you... Let me see your face... You are the one from my dreams... Then the stars were right, and this is the day. Gods give me strength."*

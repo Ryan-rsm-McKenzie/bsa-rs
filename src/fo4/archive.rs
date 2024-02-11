@@ -77,6 +77,7 @@ struct Header {
     compression_format: CompressionFormat,
 }
 
+/// See also [`ArchiveOptions`](Options).
 #[derive(Clone, Copy, Debug, Default)]
 #[repr(transparent)]
 pub struct OptionsBuilder(Options);

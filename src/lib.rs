@@ -41,14 +41,16 @@ mod private {
 
 use private::Sealed;
 
+/// A trait that enables reading from various sources.
 pub trait Reader<T>: Sealed {
     type Error;
     type Item;
 
-    /// Reads and instance `Self::Item` from the given source.
+    /// Reads an instance of `Self::Item` from the given source.
     fn read(source: T) -> core::result::Result<Self::Item, Self::Error>;
 }
 
+/// A trait that creates an optionally compressed container using the given value.
 pub trait CompressableFrom<T>: Sealed {
     /// Makes a compressed instance of `Self` using the given data.
     #[must_use]
@@ -69,6 +71,7 @@ pub enum CompressionResult {
     Decompressed,
 }
 
+/// A trait that enables reading from various sources, with configuration options.
 pub trait ReaderWithOptions<T>: Sealed {
     type Error;
     type Item;

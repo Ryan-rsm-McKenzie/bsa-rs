@@ -12,6 +12,7 @@ use flate2::{
 use lzzzz::lz4f::{self, AutoFlush, PreferencesBuilder};
 use std::io::Write;
 
+/// See also [`FileCompressionOptions`](CompressionOptions).
 #[derive(Debug, Default)]
 #[repr(transparent)]
 pub struct CompressionOptionsBuilder(CompressionOptions);
@@ -110,6 +111,7 @@ impl From<&ArchiveOptions> for CompressionOptions {
     }
 }
 
+/// See also [`FileReadOptions`](ReadOptions).
 #[derive(Debug, Default)]
 #[repr(transparent)]
 pub struct ReadOptionsBuilder(ReadOptions);

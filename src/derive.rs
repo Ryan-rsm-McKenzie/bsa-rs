@@ -498,6 +498,7 @@ pub(crate) use archive;
 
 macro_rules! hash {
     ($this:ident) => {
+        /// See also [`struct@Hash`].
         #[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
         #[repr(transparent)]
         pub struct $this(Hash);

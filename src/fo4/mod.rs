@@ -1,3 +1,6 @@
+#![doc(alias = "fallout 4")]
+#![doc(alias = "starfield")]
+
 //! Fallout 4
 //!
 //! *"Good morning! Vault-Tec calling! ... You can't begin to know how happy I am to finally speak with you. I've been trying for days. It's a matter of utmost urgency, I assure you."*
