@@ -1,12 +1,12 @@
 # Overview
 
-`ba2` is a DOM-based reader/writer for archives made for the Creation Engine games. It includes near-complete support for all archive variants from Morrowind up to Starfield. `ba2` leverages mem-mapped i/o to cut down on the memory bloat typically associated with DOM-based approaches. It is Rust a port of the equivalent [C++ library](https://github.com/Ryan-rsm-McKenzie/bsa).
+`ba2` is a DOM-based reader/writer for archives made for the Creation Engine games. It includes near-complete support for all archive variants from Morrowind up to Starfield. `ba2` leverages mem-mapped i/o to cut down on the memory bloat typically associated with DOM-based approaches. It is a Rust port of the equivalent [C++ library](https://github.com/Ryan-rsm-McKenzie/bsa).
 
 The latest development docs are available at: https://ryan-rsm-mckenzie.github.io/bsa-rs/ba2/index.html
 
 The stable release docs are available at: https://docs.rs/ba2/latest/ba2/
 
-Changelogs are available on the Github releases page: https://github.com/Ryan-rsm-McKenzie/bsa-rs/releases
+Changelogs are available at: https://github.com/Ryan-rsm-McKenzie/bsa-rs/releases
 
 # Maturity
 
