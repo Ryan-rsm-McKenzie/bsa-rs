@@ -565,7 +565,7 @@ impl<'bytes> File<'bytes> {
             width: meta.width.try_into()?,
             mip_count: meta.mip_levels.try_into()?,
             format: meta.format.bits().try_into()?,
-            flags: u8::from(is_cubemap),
+            flags: is_cubemap.into(),
             tile_mode: 8,
         }
         .into();
