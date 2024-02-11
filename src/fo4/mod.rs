@@ -56,14 +56,13 @@ pub use self::{
     },
     chunk::{
         Chunk, CompressionOptions as ChunkCompressionOptions,
-        CompressionOptionsBuilder as ChunkCompressionOptionsBuilder, Extra as ChunkExtra,
-        DX10 as ChunkDX10,
+        CompressionOptionsBuilder as ChunkCompressionOptionsBuilder,
     },
     file::{
         CapacityError as FileCapacityError, File, Header as FileHeader,
         ReadOptions as FileReadOptions, ReadOptionsBuilder as FileReadOptionsBuilder,
         WriteOptions as FileWriteOptions, WriteOptionsBuilder as FileWriteOptionsBuilder,
-        DX10 as FileDX10,
+        DX10 as DX10Header,
     },
     hashing::{hash_file, hash_file_in_place, FileHash, Hash},
 };

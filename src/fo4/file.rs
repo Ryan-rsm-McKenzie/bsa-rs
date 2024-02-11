@@ -2,8 +2,8 @@ use crate::{
     containers::CompressableBytes,
     derive,
     fo4::{
-        ArchiveOptions, Chunk, ChunkCompressionOptions, ChunkDX10, ChunkExtra, CompressionFormat,
-        CompressionLevel, Error, Format, Result,
+        ArchiveOptions, Chunk, ChunkCompressionOptions, CompressionFormat, CompressionLevel, Error,
+        Format, Result,
     },
     io::Source,
     CompressionResult, Sealed,
@@ -586,7 +586,7 @@ impl<'bytes> File<'bytes> {
             Ok(Chunk {
                 // dxtex always allocates internally, so we have to copy bytes and use from_owned here
                 bytes: CompressableBytes::from_owned(bytes.into(), None),
-                extra: ChunkDX10 { mips }.into(),
+                mips: Some(mips),
             })
         };
 
@@ -647,10 +647,7 @@ impl<'bytes> File<'bytes> {
         In: ?Sized + Source<'bytes>,
     {
         let bytes = stream.read_bytes_to_end().into_compressable(None);
-        let chunk = Chunk {
-            bytes,
-            extra: ChunkExtra::GNRL,
-        };
+        let chunk = Chunk { bytes, mips: None };
         Ok([chunk].into_iter().collect())
     }
 

@@ -117,37 +117,11 @@ impl From<&ArchiveOptions> for CompressionOptions {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DX10 {
-    pub mips: RangeInclusive<u16>,
-}
-
-impl Default for DX10 {
-    fn default() -> Self {
-        Self { mips: 0..=0 }
-    }
-}
-
-#[allow(clippy::upper_case_acronyms)]
-#[non_exhaustive]
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub enum Extra {
-    #[default]
-    GNRL,
-    DX10(DX10),
-}
-
-impl From<DX10> for Extra {
-    fn from(value: DX10) -> Self {
-        Self::DX10(value)
-    }
-}
-
 /// Represents a chunk of a file within the FO4 virtual filesystem.
 #[derive(Clone, Debug, Default)]
 pub struct Chunk<'bytes> {
     pub(crate) bytes: CompressableBytes<'bytes>,
-    pub extra: Extra,
+    pub mips: Option<RangeInclusive<u16>>,
 }
 
 derive::compressable_bytes!(Chunk: CompressionOptions);
@@ -196,7 +170,7 @@ impl<'bytes> Chunk<'bytes> {
     pub(crate) fn copy_with<'other>(&self, bytes: CompressableBytes<'other>) -> Chunk<'other> {
         Chunk {
             bytes,
-            extra: self.extra.clone(),
+            mips: self.mips.clone(),
         }
     }
 
@@ -234,7 +208,7 @@ impl<'bytes> Chunk<'bytes> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Chunk, Extra};
+    use super::Chunk;
 
     #[test]
     fn default_state() {
@@ -243,6 +217,6 @@ mod tests {
         assert!(!c.is_compressed());
         assert!(c.is_decompressed());
         assert_eq!(c.len(), 0);
-        assert_eq!(c.extra, Extra::GNRL);
+        assert_eq!(c.mips, None);
     }
 }

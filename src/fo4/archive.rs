@@ -2,8 +2,8 @@ use crate::{
     containers::Bytes,
     derive,
     fo4::{
-        self, Chunk, ChunkDX10, ChunkExtra, CompressionFormat, Error, File, FileDX10, FileHash,
-        FileHeader, Format, Hash, Result, Version,
+        self, Chunk, CompressionFormat, DX10Header, Error, File, FileHash, FileHeader, Format,
+        Hash, Result, Version,
     },
     io::{Endian, Sink, Source},
     protocols::WString,
@@ -269,10 +269,10 @@ impl<'bytes> Archive<'bytes> {
             Endian::Little,
         )?;
 
-        match (header.format, &chunk.extra) {
-            (Format::GNRL, ChunkExtra::GNRL) => (),
-            (Format::DX10, ChunkExtra::DX10(x)) => {
-                sink.write(&(*x.mips.start(), *x.mips.end()), Endian::Little)?;
+        match (header.format, &chunk.mips) {
+            (Format::GNRL, None) => (),
+            (Format::DX10, Some(mips)) => {
+                sink.write(&(*mips.start(), *mips.end()), Endian::Little)?;
             }
             _ => {
                 return Err(Error::FormatMismatch);
@@ -401,14 +401,11 @@ impl<'bytes> Archive<'bytes> {
     {
         let (data_offset, compressed_size, decompressed_size): (u64, u32, u32) =
             source.read(Endian::Little)?;
-        let extra = match header.format {
-            Format::GNRL => ChunkExtra::GNRL,
+        let mips = match header.format {
+            Format::GNRL => None,
             Format::DX10 => {
                 let (mip_first, mip_last) = source.read(Endian::Little)?;
-                ChunkDX10 {
-                    mips: mip_first..=mip_last,
-                }
-                .into()
+                Some(mip_first..=mip_last)
             }
         };
 
@@ -430,7 +427,7 @@ impl<'bytes> Archive<'bytes> {
         let decompressed_len = (compressed_size != 0).then_some(decompressed_size as usize);
         let bytes = bytes.into_compressable(decompressed_len);
 
-        Ok(Chunk { bytes, extra })
+        Ok(Chunk { bytes, mips })
     }
 
     fn read_file<In>(
@@ -467,7 +464,7 @@ impl<'bytes> Archive<'bytes> {
             Format::DX10 => {
                 let (height, width, mip_count, format, flags, tile_mode) =
                     source.read(Endian::Little)?;
-                FileDX10 {
+                DX10Header {
                     height,
                     width,
                     mip_count,
@@ -563,8 +560,8 @@ mod tests {
     use crate::{
         cc,
         fo4::{
-            Archive, ArchiveKey, ArchiveOptions, ChunkExtra, CompressionFormat, Error, File,
-            FileHeader, FileReadOptions, Format, Version,
+            Archive, ArchiveKey, ArchiveOptions, CompressionFormat, Error, File, FileHeader,
+            FileReadOptions, Format, Version,
         },
         prelude::*,
         Borrowed, CompressionResult,
@@ -615,23 +612,23 @@ mod tests {
         let mut next_chunk = || {
             let chunk = &file[index];
             index += 1;
-            let ChunkExtra::DX10(extra) = &chunk.extra else {
-                anyhow::bail!("chunk was not dx10: {:?}", chunk.extra);
+            let Some(mips) = &chunk.mips else {
+                anyhow::bail!("chunk was missing mips");
             };
-            Ok((chunk, extra))
+            Ok((chunk, mips))
         };
 
-        let (chunk, extra) = next_chunk()?;
+        let (chunk, mips) = next_chunk()?;
         assert_eq!(chunk.decompressed_len(), Some(0x8_0000));
-        assert_eq!(extra.mips, 0..=0);
+        assert_eq!(*mips, 0..=0);
 
-        let (chunk, extra) = next_chunk()?;
+        let (chunk, mips) = next_chunk()?;
         assert_eq!(chunk.decompressed_len(), Some(0x2_0000));
-        assert_eq!(extra.mips, 1..=1);
+        assert_eq!(*mips, 1..=1);
 
-        let (chunk, extra) = next_chunk()?;
+        let (chunk, mips) = next_chunk()?;
         assert_eq!(chunk.decompressed_len(), Some(0xAAB8));
-        assert_eq!(extra.mips, 2..=10);
+        assert_eq!(*mips, 2..=10);
 
         Ok(())
     }
@@ -712,11 +709,11 @@ mod tests {
         assert_eq!(file.len(), 1);
 
         let chunk = &file[0];
-        let ChunkExtra::DX10(extra) = &chunk.extra else {
-            anyhow::bail!("chunk was not dx10");
+        let Some(mips) = &chunk.mips else {
+            anyhow::bail!("chunk was missing mips");
         };
 
-        assert_eq!(extra.mips, 0..=9);
+        assert_eq!(*mips, 0..=9);
         assert_eq!(chunk.decompressed_len(), Some(0x20_00A0));
 
         Ok(())
@@ -758,26 +755,26 @@ mod tests {
         let mut next_chunk = || {
             let chunk = &file[idx];
             idx += 1;
-            let ChunkExtra::DX10(extra) = &chunk.extra else {
-                anyhow::bail!("chunk extra was not dx10");
+            let Some(mips) = &chunk.mips else {
+                anyhow::bail!("chunk extra was missing mips");
             };
-            Ok((chunk, extra))
+            Ok((chunk, mips))
         };
 
-        let (chunk, extra) = next_chunk()?;
+        let (chunk, mips) = next_chunk()?;
         assert_eq!(chunk.len(), 0x100_000);
-        assert_eq!(*extra.mips.start(), 0);
-        assert_eq!(*extra.mips.end(), 0);
+        assert_eq!(*mips.start(), 0);
+        assert_eq!(*mips.end(), 0);
 
-        let (chunk, extra) = next_chunk()?;
+        let (chunk, mips) = next_chunk()?;
         assert_eq!(chunk.len(), 0x40_000);
-        assert_eq!(*extra.mips.start(), 1);
-        assert_eq!(*extra.mips.end(), 1);
+        assert_eq!(*mips.start(), 1);
+        assert_eq!(*mips.end(), 1);
 
-        let (chunk, extra) = next_chunk()?;
+        let (chunk, mips) = next_chunk()?;
         assert_eq!(chunk.len(), 0x15_570);
-        assert_eq!(*extra.mips.start(), 2);
-        assert_eq!(*extra.mips.end(), 10);
+        assert_eq!(*mips.start(), 2);
+        assert_eq!(*mips.end(), 10);
 
         let copy = {
             let mut v = Vec::new();
@@ -927,7 +924,7 @@ mod tests {
                 assert_eq!(from_disk.header, from_archive.header);
                 assert_eq!(from_disk.len(), from_archive.len());
                 for (disk, archived) in from_disk.iter().zip(from_archive) {
-                    assert_eq!(disk.extra, archived.extra);
+                    assert_eq!(disk.mips, archived.mips);
                     assert_eq!(disk.as_bytes(), archived.as_bytes());
                 }
 
