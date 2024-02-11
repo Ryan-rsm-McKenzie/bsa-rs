@@ -63,7 +63,7 @@ derive::archive! {
 impl<'bytes> Archive<'bytes> {
     pub fn write<Out>(&self, stream: &mut Out) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         let mut sink = Sink::new(stream);
         let header = self.make_header()?;
@@ -90,7 +90,7 @@ impl<'bytes> Archive<'bytes> {
 
     fn write_files<Out>(&self, sink: &mut Sink<Out>) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         let mut offset: u32 = 0;
         for file in self.map.values() {
@@ -104,7 +104,7 @@ impl<'bytes> Archive<'bytes> {
 
     fn write_file_data<Out>(&self, sink: &mut Sink<Out>) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         for file in self.map.values() {
             sink.write_bytes(file.as_bytes())?;
@@ -115,7 +115,7 @@ impl<'bytes> Archive<'bytes> {
 
     fn write_hashes<Out>(&self, sink: &mut Sink<Out>) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         for key in self.map.keys() {
             let hash = &key.hash();
@@ -127,7 +127,7 @@ impl<'bytes> Archive<'bytes> {
 
     fn write_header<Out>(sink: &mut Sink<Out>, header: &Header) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         sink.write(
             &(
@@ -142,7 +142,7 @@ impl<'bytes> Archive<'bytes> {
 
     fn write_name_offsets<Out>(&self, sink: &mut Sink<Out>) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         let mut offset: u32 = 0;
         for key in self.map.keys() {
@@ -155,7 +155,7 @@ impl<'bytes> Archive<'bytes> {
 
     fn write_names<Out>(&self, sink: &mut Sink<Out>) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         for key in self.map.keys() {
             sink.write_protocol::<ZString>(key.name(), Endian::Little)?;

@@ -372,7 +372,7 @@ derive::archive! {
 impl<'bytes> Archive<'bytes> {
     pub fn write<Out>(&self, stream: &mut Out, options: &Options) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         let mut sink = Sink::new(stream);
         let header = self.make_header(*options)?;
@@ -551,7 +551,7 @@ impl<'bytes> Archive<'bytes> {
         file_entries_offset: &mut u32,
     ) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         Self::write_hash(sink, options, (*key.hash()).into())?;
 
@@ -596,7 +596,7 @@ impl<'bytes> Archive<'bytes> {
         embedded_file_name: Option<&BStr>,
     ) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         if let Some(name) = embedded_file_name {
             sink.write_protocol::<protocols::BString>(name, Endian::Little)?;
@@ -620,7 +620,7 @@ impl<'bytes> Archive<'bytes> {
         embedded_file_name: Option<&BStr>,
     ) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         Self::write_hash(sink, options, (*key.hash()).into())?;
 
@@ -658,7 +658,7 @@ impl<'bytes> Archive<'bytes> {
 
     fn write_hash<Out>(sink: &mut Sink<Out>, options: Options, hash: Hash) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         sink.write(
             &(hash.last, hash.last2, hash.length, hash.first),
@@ -677,7 +677,7 @@ impl<'bytes> Archive<'bytes> {
 
     fn write_header<Out>(sink: &mut Sink<Out>, header: &Header) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         sink.write(
             &(

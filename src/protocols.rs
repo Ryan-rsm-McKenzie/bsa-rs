@@ -40,7 +40,7 @@ impl BinaryWriteable for BString {
 
     fn to_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item, endian: Endian) -> io::Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         let len: Result<u8, _> = item.len().try_into();
         match len {
@@ -85,7 +85,7 @@ impl BinaryWriteable for ZString {
 
     fn to_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item, _: Endian) -> io::Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         stream.write_bytes(item)?;
         stream.write_bytes(b"\0")?;
@@ -120,7 +120,7 @@ impl BinaryWriteable for BZString {
 
     fn to_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item, endian: Endian) -> io::Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         let len: Result<u8, _> = (item.len() + 1).try_into();
         match len {
@@ -154,7 +154,7 @@ impl BinaryWriteable for WString {
 
     fn to_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item, endian: Endian) -> io::Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         let len: Result<u16, _> = item.len().try_into();
         match len {

@@ -205,7 +205,7 @@ derive::archive! {
 impl<'bytes> Archive<'bytes> {
     pub fn write<Out>(&self, stream: &mut Out, options: &Options) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         let mut sink = Sink::new(stream);
         let (header, mut offsets) = self.make_header(*options)?;
@@ -255,7 +255,7 @@ impl<'bytes> Archive<'bytes> {
         chunk: &Chunk<'bytes>,
     ) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         let data_offset: u64 = offsets.file_data.try_into()?;
         offsets.file_data += chunk.len();
@@ -292,7 +292,7 @@ impl<'bytes> Archive<'bytes> {
         file: &File<'bytes>,
     ) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         Self::write_hash(sink, hash)?;
 
@@ -332,7 +332,7 @@ impl<'bytes> Archive<'bytes> {
 
     fn write_hash<Out>(sink: &mut Sink<Out>, hash: &Hash) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         sink.write(&(hash.file, hash.extension, hash.directory), Endian::Little)?;
         Ok(())
@@ -340,7 +340,7 @@ impl<'bytes> Archive<'bytes> {
 
     fn write_header<Out>(sink: &mut Sink<Out>, header: &Header) -> Result<()>
     where
-        Out: Write,
+        Out: ?Sized + Write,
     {
         let format = match header.format {
             Format::GNRL => constants::GNRL,
