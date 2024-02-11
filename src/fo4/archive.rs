@@ -3,7 +3,7 @@ use crate::{
     derive,
     fo4::{
         self, Chunk, CompressionFormat, DX10Header, Error, File, FileHash, FileHeader, Format,
-        Hash, Result, Version,
+        GNMFHeader, Hash, Result, Version,
     },
     io::{Endian, Sink, Source},
     protocols::WString,
@@ -18,6 +18,7 @@ mod constants {
 
     pub(crate) const GNRL: u32 = cc::make_four(b"GNRL");
     pub(crate) const DX10: u32 = cc::make_four(b"DX10");
+    pub(crate) const GNMF: u32 = cc::make_four(b"GNMF");
 
     pub(crate) const HEADER_SIZE_V1: usize = 0x18;
     pub(crate) const HEADER_SIZE_V2: usize = 0x20;
@@ -25,9 +26,11 @@ mod constants {
 
     pub(crate) const FILE_HEADER_SIZE_GNRL: u16 = 0x10;
     pub(crate) const FILE_HEADER_SIZE_DX10: u16 = 0x18;
+    pub(crate) const FILE_HEADER_SIZE_GNMF: u16 = 0x30;
 
     pub(crate) const CHUNK_SIZE_GNRL: usize = 0x14;
     pub(crate) const CHUNK_SIZE_DX10: usize = 0x18;
+    pub(crate) const CHUNK_SIZE_GNMF: usize = 0x18;
 
     pub(crate) const CHUNK_SENTINEL: u32 = 0xBAAD_F00D;
 }
@@ -50,6 +53,7 @@ impl Offsets {
             let (file_header_size, chunk_size) = match options.format {
                 Format::GNRL => (constants::FILE_HEADER_SIZE_GNRL, constants::CHUNK_SIZE_GNRL),
                 Format::DX10 => (constants::FILE_HEADER_SIZE_DX10, constants::CHUNK_SIZE_DX10),
+                Format::GNMF => (constants::FILE_HEADER_SIZE_GNMF, constants::CHUNK_SIZE_GNMF),
             };
             let chunks_count: usize = archive.values().map(File::len).sum();
             chunks_offset
@@ -272,7 +276,7 @@ impl<'bytes> Archive<'bytes> {
 
         match (header.format, &chunk.mips) {
             (Format::GNRL, None) => (),
-            (Format::DX10, Some(mips)) => {
+            (Format::DX10 | Format::GNMF, Some(mips)) => {
                 sink.write(&(*mips.start(), *mips.end()), Endian::Little)?;
             }
             _ => {
@@ -300,6 +304,7 @@ impl<'bytes> Archive<'bytes> {
         let chunk_size = match header.format {
             Format::GNRL => constants::FILE_HEADER_SIZE_GNRL,
             Format::DX10 => constants::FILE_HEADER_SIZE_DX10,
+            Format::GNMF => constants::FILE_HEADER_SIZE_GNMF,
         };
         sink.write(&(0u8, chunk_count, chunk_size), Endian::Little)?;
 
@@ -317,6 +322,9 @@ impl<'bytes> Archive<'bytes> {
                     ),
                     Endian::Little,
                 )?;
+            }
+            (Format::GNMF, FileHeader::GNMF(x)) => {
+                sink.write(&x.metadata, Endian::Little)?;
             }
             (_, _) => {
                 return Err(Error::FormatMismatch);
@@ -345,6 +353,7 @@ impl<'bytes> Archive<'bytes> {
         let format = match header.format {
             Format::GNRL => constants::GNRL,
             Format::DX10 => constants::DX10,
+            Format::GNMF => constants::GNMF,
         };
 
         sink.write(
@@ -404,7 +413,7 @@ impl<'bytes> Archive<'bytes> {
             source.read(Endian::Little)?;
         let mips = match header.format {
             Format::GNRL => None,
-            Format::DX10 => {
+            Format::DX10 | Format::GNMF => {
                 let (mip_first, mip_last) = source.read(Endian::Little)?;
                 Some(mip_first..=mip_last)
             }
@@ -475,6 +484,10 @@ impl<'bytes> Archive<'bytes> {
                 }
                 .into()
             }
+            Format::GNMF => {
+                let metadata = source.read(Endian::Little)?;
+                GNMFHeader { metadata }.into()
+            }
         };
 
         let mut chunks = Vec::with_capacity(chunk_count.into());
@@ -521,6 +534,7 @@ impl<'bytes> Archive<'bytes> {
         let format = match contents_format {
             constants::GNRL => Format::GNRL,
             constants::DX10 => Format::DX10,
+            constants::GNMF => Format::GNMF,
             _ => return Err(Error::InvalidFormat(contents_format)),
         };
 

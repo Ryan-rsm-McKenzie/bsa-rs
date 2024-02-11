@@ -1,11 +1,12 @@
 use crate::{
+    cc,
     containers::CompressableBytes,
     derive,
     fo4::{
         ArchiveOptions, Chunk, ChunkCompressionOptions, CompressionFormat, CompressionLevel, Error,
         Format, Result,
     },
-    io::Source,
+    io::{Endian, Sink, Source},
     CompressionResult, Sealed,
 };
 use core::{
@@ -335,18 +336,29 @@ pub struct DX10 {
     pub tile_mode: u8,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct GNMF {
+    pub metadata: [u32; 8],
+}
+
 #[allow(clippy::upper_case_acronyms)]
-#[non_exhaustive]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum Header {
     #[default]
     GNRL,
     DX10(DX10),
+    GNMF(GNMF),
 }
 
 impl From<DX10> for Header {
     fn from(value: DX10) -> Self {
         Self::DX10(value)
+    }
+}
+
+impl From<GNMF> for Header {
+    fn from(value: GNMF) -> Self {
+        Self::GNMF(value)
     }
 }
 
@@ -520,9 +532,11 @@ impl<'bytes> File<'bytes> {
     where
         Out: ?Sized + Write,
     {
-        match self.header {
-            Header::GNRL => self.write_gnrl(stream, *options)?,
-            Header::DX10(x) => self.write_dx10(stream, *options, x)?,
+        let mut sink = Sink::new(stream);
+        match &self.header {
+            Header::GNRL => self.write_gnrl(&mut sink, *options)?,
+            Header::DX10(x) => self.write_dx10(&mut sink, *options, *x)?,
+            Header::GNMF(x) => self.write_gnmf(&mut sink, *options, x)?,
         }
 
         Ok(())
@@ -544,6 +558,7 @@ impl<'bytes> File<'bytes> {
         let mut this = match options.format {
             Format::GNRL => Self::read_gnrl(stream),
             Format::DX10 => Self::read_dx10(stream, options),
+            Format::GNMF => Err(Error::NotImplemented),
         }?;
 
         if options.compression_result == CompressionResult::Compressed {
@@ -654,7 +669,12 @@ impl<'bytes> File<'bytes> {
         Ok([chunk].into_iter().collect())
     }
 
-    fn write_dx10<Out>(&self, stream: &mut Out, options: WriteOptions, dx10: DX10) -> Result<()>
+    fn write_dx10<Out>(
+        &self,
+        stream: &mut Sink<Out>,
+        options: WriteOptions,
+        dx10: DX10,
+    ) -> Result<()>
     where
         Out: ?Sized + Write,
     {
@@ -678,11 +698,86 @@ impl<'bytes> File<'bytes> {
         };
 
         let header = meta.encode_dds_header(DDS_FLAGS::DDS_FLAGS_NONE)?;
-        stream.write_all(&header)?;
+        stream.write_bytes(&header)?;
         self.write_gnrl(stream, options)
     }
 
-    fn write_gnrl<Out>(&self, stream: &mut Out, options: WriteOptions) -> Result<()>
+    fn write_gnmf<Out>(
+        &self,
+        stream: &mut Sink<Out>,
+        options: WriteOptions,
+        gnmf: &GNMF,
+    ) -> Result<()>
+    where
+        Out: ?Sized + Write,
+    {
+        const ALIGNMENT: u8 = 0x8;
+
+        let body = {
+            const ALIGN: usize = ALIGNMENT as usize;
+            let len = {
+                let len: usize = self
+                    .iter()
+                    .map(|x| x.decompressed_len().unwrap_or_else(|| x.len()))
+                    .sum();
+                let extra = len % ALIGN;
+                if extra == 0 {
+                    len
+                } else {
+                    len - extra + ALIGN
+                }
+            };
+
+            let mut buffer = Vec::with_capacity(len);
+            let mut stream = Sink::new(&mut buffer);
+            self.write_gnrl(&mut stream, options)?;
+
+            let extra = buffer.len() % ALIGN;
+            if extra != 0 {
+                buffer.resize_with(buffer.len() - extra + ALIGN, Default::default);
+            }
+
+            buffer
+        };
+
+        let header = {
+            const HEADER_SIZE: u32 = 0x100;
+            let magic = cc::make_four(b"GNF ");
+            let contents_size: u32 = HEADER_SIZE - 0x8;
+            let version: u8 = 2;
+            let texture_count: u8 = 1;
+            let alignment: u8 = ALIGNMENT;
+            let stream_size: u32 = HEADER_SIZE
+                .checked_add(body.len().try_into()?)
+                .ok_or(Error::IntegralOverflow)?;
+
+            let mut buffer = Vec::with_capacity(HEADER_SIZE as usize);
+            let mut stream = Sink::new(&mut buffer);
+
+            stream.write(
+                &(
+                    magic,
+                    contents_size,
+                    version,
+                    texture_count,
+                    alignment,
+                    0u8,
+                    stream_size,
+                ),
+                Endian::Little,
+            )?;
+            stream.write(&gnmf.metadata, Endian::Little)?;
+
+            buffer.resize_with(HEADER_SIZE as usize, Default::default);
+            buffer
+        };
+
+        stream.write_bytes(&header)?;
+        stream.write_bytes(&body)?;
+        Ok(())
+    }
+
+    fn write_gnrl<Out>(&self, stream: &mut Sink<Out>, options: WriteOptions) -> Result<()>
     where
         Out: ?Sized + Write,
     {
@@ -699,7 +794,7 @@ impl<'bytes> File<'bytes> {
             } else {
                 chunk.as_bytes()
             };
-            stream.write_all(bytes)?;
+            stream.write_bytes(bytes)?;
         }
 
         Ok(())

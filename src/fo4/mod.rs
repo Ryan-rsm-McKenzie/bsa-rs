@@ -65,7 +65,7 @@ pub use self::{
         CapacityError as FileCapacityError, File, Header as FileHeader,
         ReadOptions as FileReadOptions, ReadOptionsBuilder as FileReadOptionsBuilder,
         WriteOptions as FileWriteOptions, WriteOptionsBuilder as FileWriteOptionsBuilder,
-        DX10 as DX10Header,
+        DX10 as DX10Header, GNMF as GNMFHeader,
     },
     hashing::{hash_file, hash_file_in_place, FileHash, Hash},
 };
@@ -98,6 +98,9 @@ pub enum Error {
     #[error(transparent)]
     Infallible(#[from] Infallible),
 
+    #[error("an operation on two integers would have overflowed and corrupted data")]
+    IntegralOverflow,
+
     #[error("an operation on an integer would have truncated and corrupted data")]
     IntegralTruncation,
 
@@ -121,6 +124,9 @@ pub enum Error {
 
     #[error(transparent)]
     LZ4(#[from] lzzzz::Error),
+
+    #[error("support for this feature is not yet implemented")]
+    NotImplemented,
 }
 
 impl From<TryFromIntError> for Error {
@@ -172,12 +178,15 @@ impl CompressionLevel {
 /// Represents the file format for an archive.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Format {
-    /// A general archive can contain any kind of file.
+    /// A GNRL archive can contain any kind of file.
     #[default]
     GNRL,
 
-    /// A directx archive can only contain .dds files.
+    /// A DX10 archive can only contain .dds files.
     DX10,
+
+    /// A GNMF archive can only contain .gnf files.
+    GNMF,
 }
 
 /// Indicates the version of an archive.
