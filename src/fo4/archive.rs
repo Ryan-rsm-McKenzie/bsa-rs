@@ -465,6 +465,7 @@ impl<'bytes> Archive<'bytes> {
             (header.format, chunk_size),
             (Format::GNRL, constants::FILE_HEADER_SIZE_GNRL)
                 | (Format::DX10, constants::FILE_HEADER_SIZE_DX10)
+                | (Format::GNMF, constants::FILE_HEADER_SIZE_GNMF)
         ) {
             return Err(Error::InvalidChunkSize(chunk_size));
         }
