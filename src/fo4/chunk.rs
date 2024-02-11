@@ -11,6 +11,7 @@ use flate2::{
 use lzzzz::{lz4, lz4_hc};
 use std::io::Write;
 
+/// See also [`ChunkCompressionOptions`](CompressionOptions).
 #[derive(Debug, Default)]
 #[repr(transparent)]
 pub struct CompressionOptionsBuilder(CompressionOptions);

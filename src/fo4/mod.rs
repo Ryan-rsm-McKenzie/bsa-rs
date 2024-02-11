@@ -182,10 +182,10 @@ pub enum Format {
     #[default]
     GNRL,
 
-    /// A DX10 archive can only contain .dds files.
+    /// A DX10 archive can only contain .dds files (Microsoft DirectX).
     DX10,
 
-    /// A GNMF archive can only contain .gnf files.
+    /// A GNMF archive can only contain .gnf files (Sony GNM).
     GNMF,
 }
 

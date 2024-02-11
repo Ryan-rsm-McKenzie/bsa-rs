@@ -326,6 +326,7 @@ impl From<&ArchiveOptions> for WriteOptions {
     }
 }
 
+/// File header for DX10 archives.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct DX10 {
     pub height: u16,
@@ -336,11 +337,16 @@ pub struct DX10 {
     pub tile_mode: u8,
 }
 
+/// File header for GNMF archives.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct GNMF {
+    /// See [here](https://github.com/tge-was-taken/GFD-Studio/blob/dad6c2183a6ec0716c3943b71991733bfbd4649d/GFDLibrary/Textures/GNF/GNFTexture.cs#L529-L536) for more info.
     pub metadata: [u32; 8],
 }
 
+/// Optionally present file header.
+///
+/// The header variant must match the archive [`Format`] when writing.
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum Header {
