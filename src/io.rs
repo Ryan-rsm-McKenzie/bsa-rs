@@ -328,6 +328,93 @@ make_binary_streamable!(i16);
 make_binary_streamable!(i32);
 make_binary_streamable!(i64);
 
+macro_rules! make_binary_streamable_array {
+    ($n:literal, $($idx:tt $t:ident),+) => {
+        impl<'bytes, T> BinaryReadable<'bytes> for [T; $n]
+        where
+            T: BinaryReadable<'bytes>
+        {
+            type Item = [T::Item; $n];
+
+            fn from_be_stream<In>(stream: &mut In) -> io::Result<Self::Item>
+            where
+                In: ?Sized + Source<'bytes>,
+            {
+                Ok([$(
+                    $t::from_be_stream(stream)?,
+                )+])
+            }
+
+            fn from_le_stream<In>(stream: &mut In) -> io::Result<Self::Item>
+            where
+                In: ?Sized + Source<'bytes>,
+            {
+                Ok([$(
+                    $t::from_le_stream(stream)?,
+                )+])
+            }
+
+            fn from_ne_stream<In>(stream: &mut In) -> io::Result<Self::Item>
+            where
+                In: ?Sized + Source<'bytes>,
+            {
+                Ok([$(
+                    $t::from_ne_stream(stream)?,
+                )+])
+            }
+        }
+
+        impl<'bytes, T> BinaryWriteable for [T; $n]
+        where
+            T: BinaryWriteable,
+            <T as BinaryWriteable>::Item: Sized,
+        {
+            type Item = [T::Item; $n];
+
+            fn to_be_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item) -> io::Result<()>
+            where
+                Out: ?Sized + Write,
+            {
+                $(
+                    $t::to_be_stream(stream, &item[$idx])?;
+                )+
+                Ok(())
+            }
+
+            fn to_le_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item) -> io::Result<()>
+            where
+                Out: ?Sized + Write,
+            {
+                $(
+                    $t::to_le_stream(stream, &item[$idx])?;
+                )+
+                Ok(())
+            }
+
+            fn to_ne_stream<Out>(stream: &mut Sink<Out>, item: &Self::Item) -> io::Result<()>
+            where
+                Out: ?Sized + Write,
+            {
+                $(
+                    $t::to_ne_stream(stream, &item[$idx])?;
+                )+
+                Ok(())
+            }
+        }
+    };
+}
+
+make_binary_streamable_array!( 1, 0 T);
+make_binary_streamable_array!( 2, 0 T, 1 T);
+make_binary_streamable_array!( 3, 0 T, 1 T, 2 T);
+make_binary_streamable_array!( 4, 0 T, 1 T, 2 T, 3 T);
+make_binary_streamable_array!( 5, 0 T, 1 T, 2 T, 3 T, 4 T);
+make_binary_streamable_array!( 6, 0 T, 1 T, 2 T, 3 T, 4 T, 5 T);
+make_binary_streamable_array!( 7, 0 T, 1 T, 2 T, 3 T, 4 T, 5 T, 6 T);
+make_binary_streamable_array!( 8, 0 T, 1 T, 2 T, 3 T, 4 T, 5 T, 6 T, 7 T);
+make_binary_streamable_array!( 9, 0 T, 1 T, 2 T, 3 T, 4 T, 5 T, 6 T, 7 T, 8 T);
+make_binary_streamable_array!(10, 0 T, 1 T, 2 T, 3 T, 4 T, 5 T, 6 T, 7 T, 8 T, 9 T);
+
 macro_rules! make_binary_streamable_tuple {
     ($($idx:tt $t:ident),+) => {
         impl<'bytes, $($t,)+> BinaryReadable<'bytes> for ($($t,)+)
@@ -366,7 +453,10 @@ macro_rules! make_binary_streamable_tuple {
 
         impl<$($t,)+> BinaryWriteable for ($($t,)+)
         where
-            $($t: BinaryWriteable, <$t as BinaryWriteable>::Item: Sized,)+
+            $(
+                $t: BinaryWriteable,
+                <$t as BinaryWriteable>::Item: Sized,
+            )+
         {
             type Item = ($($t::Item,)+);
 
