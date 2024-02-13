@@ -641,8 +641,12 @@ impl<'bytes> File<'bytes> {
                         size = image.slice_pitch;
                     }
 
+                    if v.len() == 3 {
+                        break;
+                    }
+
                     stop += 1;
-                    if stop == images_len.get() || v.len() == 3 {
+                    if stop == images_len.get() {
                         break;
                     }
                 }
