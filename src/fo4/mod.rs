@@ -70,7 +70,7 @@ pub use self::{
     hashing::{hash_file, hash_file_in_place, FileHash, Hash},
 };
 
-use core::{convert::Infallible, num::TryFromIntError};
+use core::num::TryFromIntError;
 use directxtex::HResultError;
 use std::io;
 
@@ -89,14 +89,8 @@ pub enum Error {
     #[error("error while working with a dds file")]
     DX10(#[from] HResultError),
 
-    #[error(
-        "attempted to write an archive in a format that does not match a file/chunk in the archive"
-    )]
+    #[error("attempted to write in a format that does not match a file/chunk")]
     FormatMismatch,
-
-    #[doc(hidden)]
-    #[error(transparent)]
-    Infallible(#[from] Infallible),
 
     #[error("an operation on two integers would have overflowed and corrupted data")]
     IntegralOverflow,
