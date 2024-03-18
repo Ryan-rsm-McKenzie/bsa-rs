@@ -21,7 +21,7 @@ use directxtex::{
 };
 use std::{error, io::Write};
 
-#[allow(clippy::unnecessary_cast)]
+#[allow(clippy::cast_possible_truncation, clippy::unnecessary_cast)]
 const TEX_MISC_TEXTURECUBE: u32 = TEX_MISC_FLAG::TEX_MISC_TEXTURECUBE.bits() as u32;
 
 /// File is at chunk capacity.
