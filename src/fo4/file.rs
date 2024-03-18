@@ -350,7 +350,8 @@ pub struct GNMF {
 
 macro_rules! bit_field {
     ($getter:ident, $setter:ident, [$slot:literal], $count:literal << $shift:literal,) => {
-        pub fn $getter(&self) -> u32 {
+        #[allow(unused)]
+        fn $getter(&self) -> u32 {
             const MASK: u32 = {
                 let mut i = 0;
                 let mut mask: u32 = 0;
@@ -363,7 +364,8 @@ macro_rules! bit_field {
             (self.metadata[$slot] & MASK) >> $shift
         }
 
-        pub fn $setter(&mut self, $getter: u32) -> &mut Self {
+        #[allow(unused)]
+        fn $setter(&mut self, $getter: u32) -> &mut Self {
             const MASK: u32 = {
                 let mut i = 0;
                 let mut mask: u32 = 0;
@@ -1177,12 +1179,10 @@ impl<'bytes> File<'bytes> {
         Out: ?Sized + Write,
     {
         match &self.header {
-            Header::GNRL => self.write_gnrl(stream, *options)?,
-            Header::DX10(x) => self.write_dx10(stream, *options, *x)?,
-            Header::GNMF(x) => self.write_gnmf(stream, *options, x)?,
+            Header::GNRL => self.write_gnrl(stream, *options),
+            Header::DX10(x) => self.write_dx10(stream, *options, *x),
+            Header::GNMF(_) => Err(Error::NotImplemented), //self.write_gnmf(stream, *options, x)?,
         }
-
-        Ok(())
     }
 
     fn do_reserve(&mut self) {
@@ -1201,7 +1201,7 @@ impl<'bytes> File<'bytes> {
         let mut this = match options.format {
             Format::GNRL => Self::read_gnrl(stream),
             Format::DX10 => Self::read_dx10(stream, options),
-            Format::GNMF => Self::read_gnmf(stream, options),
+            Format::GNMF => Err(Error::NotImplemented), // Self::read_gnmf(stream, options),
         }?;
 
         if options.compression_result == CompressionResult::Compressed {
@@ -1312,6 +1312,7 @@ impl<'bytes> File<'bytes> {
         Ok(Self { chunks, header })
     }
 
+    #[allow(unused)]
     fn read_gnmf<In>(stream: &mut In, options: &ReadOptions) -> Result<Self>
     where
         In: ?Sized + Source<'bytes>,
@@ -1396,6 +1397,7 @@ impl<'bytes> File<'bytes> {
         self.write_gnrl(stream, options)
     }
 
+    #[allow(unused)]
     fn write_gnmf<Out>(&self, stream: &mut Out, options: WriteOptions, gnmf: &GNMF) -> Result<()>
     where
         Out: ?Sized + Write,
