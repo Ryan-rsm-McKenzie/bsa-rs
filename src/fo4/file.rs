@@ -21,6 +21,7 @@ use directxtex::{
 };
 use std::{error, io::Write};
 
+#[allow(clippy::unnecessary_cast)]
 const TEX_MISC_TEXTURECUBE: u32 = TEX_MISC_FLAG::TEX_MISC_TEXTURECUBE.bits() as u32;
 
 /// File is at chunk capacity.
@@ -568,13 +569,12 @@ impl GNMF {
         // https://learn.microsoft.com/en-us/windows/win32/direct3d11/texture-block-compression-in-direct3d-11
         match self.surface_format() {
             SurfaceFormat::FORMAT_8_8_8_8 => Ok(4),
-            SurfaceFormat::BC1 => Ok(8),
-            SurfaceFormat::BC2 => Ok(16),
-            SurfaceFormat::BC3 => Ok(16),
-            SurfaceFormat::BC4 => Ok(8),
-            SurfaceFormat::BC5 => Ok(16),
-            SurfaceFormat::BC6 => Ok(16),
-            SurfaceFormat::BC7 => Ok(16),
+            SurfaceFormat::BC1 | SurfaceFormat::BC4 => Ok(8),
+            SurfaceFormat::BC2
+            | SurfaceFormat::BC3
+            | SurfaceFormat::BC5
+            | SurfaceFormat::BC6
+            | SurfaceFormat::BC7 => Ok(16),
             _ => Err(Error::NotImplemented),
         }
     }
