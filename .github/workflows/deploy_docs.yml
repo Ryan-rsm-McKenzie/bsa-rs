@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/deploy_docs.yml'
       - 'src/**'
+      - 'Cargo.toml'
 
 permissions:
   contents: write
