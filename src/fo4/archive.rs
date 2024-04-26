@@ -44,11 +44,9 @@ impl Offsets {
     #[must_use]
     pub fn new(archive: &Archive, options: Options) -> Self {
         let chunks_offset = match options.version {
-            Version::v1 => constants::HEADER_SIZE_V1,
+            Version::v1 | Version::v7 | Version::v8 => constants::HEADER_SIZE_V1,
             Version::v2 => constants::HEADER_SIZE_V2,
             Version::v3 => constants::HEADER_SIZE_V3,
-            Version::v7 => constants::HEADER_SIZE_V1,
-            Version::v8 => constants::HEADER_SIZE_V1,
         };
 
         let file_data_offset = {
