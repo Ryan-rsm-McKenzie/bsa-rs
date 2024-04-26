@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"ba2":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.77.2/core/convert/trait.TryFrom.html\" title=\"trait core::convert::TryFrom\">TryFrom</a>&lt;&amp;TexMetadata&gt; for <a class=\"struct\" href=\"ba2/fo4/struct.GNMFHeader.html\" title=\"struct ba2::fo4::GNMFHeader\">GNMF</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.77.2/core/convert/trait.TryFrom.html\" title=\"trait core::convert::TryFrom\">TryFrom</a>&lt;&amp;<a class=\"struct\" href=\"ba2/fo4/struct.GNMFHeader.html\" title=\"struct ba2::fo4::GNMFHeader\">GNMF</a>&gt; for TexMetadata"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"ba2":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.77.2/core/fmt/trait.LowerHex.html\" title=\"trait core::fmt::LowerHex\">LowerHex</a> for <a class=\"struct\" href=\"ba2/tes4/struct.ArchiveTypes.html\" title=\"struct ba2::tes4::ArchiveTypes\">Types</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.77.2/core/fmt/trait.LowerHex.html\" title=\"trait core::fmt::LowerHex\">LowerHex</a> for <a class=\"struct\" href=\"ba2/tes4/struct.ArchiveFlags.html\" title=\"struct ba2::tes4::ArchiveFlags\">Flags</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
