@@ -47,6 +47,8 @@ impl Offsets {
             Version::v1 => constants::HEADER_SIZE_V1,
             Version::v2 => constants::HEADER_SIZE_V2,
             Version::v3 => constants::HEADER_SIZE_V3,
+            Version::v7 => constants::HEADER_SIZE_V1,
+            Version::v8 => constants::HEADER_SIZE_V1,
         };
 
         let file_data_offset = {
@@ -367,11 +369,11 @@ impl<'bytes> Archive<'bytes> {
             Endian::Little,
         )?;
 
-        if header.version >= Version::v2 {
+        if matches!(header.version, Version::v2 | Version::v3) {
             sink.write(&1u64, Endian::Little)?;
         }
 
-        if header.version >= Version::v3 {
+        if header.version == Version::v3 {
             let format: u32 = match header.compression_format {
                 CompressionFormat::Zip => 0,
                 CompressionFormat::LZ4 => 3,
@@ -543,14 +545,16 @@ impl<'bytes> Archive<'bytes> {
             1 => Version::v1,
             2 => Version::v2,
             3 => Version::v3,
+            7 => Version::v7,
+            8 => Version::v8,
             _ => return Err(Error::InvalidVersion(version)),
         };
 
-        if version >= Version::v2 {
+        if matches!(version, Version::v2 | Version::v3) {
             source.read::<u64>(Endian::Little)?;
         }
 
-        let compression_format = if version >= Version::v3 {
+        let compression_format = if version == Version::v3 {
             let format: u32 = source.read(Endian::Little)?;
             if format == 3 {
                 CompressionFormat::LZ4
@@ -1117,6 +1121,72 @@ mod tests {
 
         assert_eq!(copy.len(), original.len());
         assert_eq!(copy, &original[..]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_gen_update() -> anyhow::Result<()> {
+        let root = Path::new("data/fo4_next_gen_test");
+        let options = [
+            (Format::DX10, Version::v7),
+            (Format::DX10, Version::v8),
+            (Format::GNRL, Version::v7),
+            (Format::GNRL, Version::v8),
+        ];
+
+        for (format, version) in options {
+            let format_str = match format {
+                Format::GNRL => "gnrl",
+                Format::DX10 => "dx10",
+                Format::GNMF => "gnmf",
+            };
+            let archive_path = root.join(format!("{format_str}_v{}.ba2", version as u32));
+            let (archive, meta) = Archive::read(archive_path.as_path())
+                .with_context(|| format!("failed to read archive: {archive_path:?}"))?;
+            assert_eq!(meta.version(), version);
+            assert_eq!(meta.format(), format);
+
+            let files: &[_] = match format {
+                Format::GNRL => &["License.txt", "SampleA.png"],
+                Format::DX10 => &["Fence006_1K_Roughness.dds"],
+                Format::GNMF => &[],
+            };
+            assert_eq!(archive.len(), files.len());
+            for file_name in files {
+                let key: ArchiveKey = file_name.as_bytes().into();
+                let file = archive.get(&key).with_context(|| {
+                    format!("failed to get file '{file_name}' from archive '{archive_path:?}'")
+                })?;
+
+                if format == Format::DX10 {
+                    continue;
+                }
+
+                let from_archive = {
+                    let mut v = Vec::new();
+                    file.write(&mut v, &meta.into()).with_context(|| {
+                        format!(
+                            "failed to write file '{file_name}' from archive '{archive_path:?}'"
+                        )
+                    })?;
+                    v
+                };
+                let from_archive = &from_archive[..];
+
+                let on_disk = {
+                    let file_path = root.join(format!("{format_str}/{file_name}"));
+                    let file = fs::File::open(&file_path)
+                        .with_context(|| format!("failed to open file: {file_path:?}"))?;
+                    unsafe { Mmap::map(&file) }
+                        .with_context(|| format!("failed to map file: {file_path:?}"))?
+                };
+                let on_disk = &on_disk[..];
+
+                assert_eq!(on_disk.len(), from_archive.len());
+                assert_eq!(on_disk, from_archive);
+            }
+        }
 
         Ok(())
     }

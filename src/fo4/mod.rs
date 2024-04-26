@@ -196,4 +196,10 @@ pub enum Version {
 
     /// Intoduced in Starfield.
     v3 = 3,
+
+    /// Intoduced in the Fallout 4 next-gen update.
+    v7 = 7,
+
+    /// Intoduced in the Fallout 4 next-gen update.
+    v8 = 8,
 }
