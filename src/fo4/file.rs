@@ -21,9 +21,6 @@ use directxtex::{
 };
 use std::{error, io::Write};
 
-#[allow(clippy::cast_possible_truncation, clippy::unnecessary_cast)]
-const TEX_MISC_TEXTURECUBE: u32 = TEX_MISC_FLAG::TEX_MISC_TEXTURECUBE.bits() as u32;
-
 /// File is at chunk capacity.
 pub struct CapacityError<'bytes>(Chunk<'bytes>);
 
@@ -678,7 +675,7 @@ impl TryFrom<&GNMF> for TexMetadata {
                 + 1,
             mip_levels: (value.last_mip_level() - value.base_mip_level()) as usize + 1,
             misc_flags: if texture_type == TextureType::CUBEMAP {
-                TEX_MISC_TEXTURECUBE
+                TEX_MISC_FLAG::TEX_MISC_TEXTURECUBE.into()
             } else {
                 0
             },
@@ -1376,16 +1373,17 @@ impl<'bytes> File<'bytes> {
     where
         Out: ?Sized + Write,
     {
+        let is_cubemap = (dx10.flags & 1) != 0;
         let meta = TexMetadata {
             width: dx10.width.into(),
             height: dx10.height.into(),
             depth: 1,
-            array_size: 1,
+            array_size: if is_cubemap { 6 } else { 1 },
             mip_levels: dx10.mip_count.into(),
-            misc_flags: if (dx10.flags & 1) == 0 {
-                0
+            misc_flags: if is_cubemap {
+                TEX_MISC_FLAG::TEX_MISC_TEXTURECUBE.into()
             } else {
-                TEX_MISC_TEXTURECUBE
+                0
             },
             misc_flags2: 0,
             format: u32::from(dx10.format).into(),
