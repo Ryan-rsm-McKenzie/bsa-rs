@@ -2,14 +2,14 @@ name: Cargo Deny
 
 on:
   push:
-    branches: ['main']
+    branches: ["main"]
     paths:
-      - '.github/workflows/cargo_deny.yml'
-      - 'Cargo.lock'
-      - 'Cargo.toml'
-      - 'deny.toml'
+      - ".github/workflows/cargo_deny.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "deny.toml"
   pull_request:
-    branches: ['main']
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
@@ -19,6 +19,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: EmbarkStudios/cargo-deny-action@v1
+      - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check bans licenses sources

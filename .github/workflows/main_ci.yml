@@ -2,15 +2,15 @@ name: Main CI
 
 on:
   push:
-    branches: ['main']
+    branches: ["main"]
     paths:
-      - '.github/workflows/main_ci.yml'
-      - 'data/**/*'
-      - 'src/**/*.rs'
-      - 'Cargo.lock'
-      - 'Cargo.toml'
+      - ".github/workflows/main_ci.yml"
+      - "data/**/*"
+      - "src/**/*.rs"
+      - "Cargo.lock"
+      - "Cargo.toml"
   pull_request:
-    branches: ['main']
+    branches: ["main"]
   workflow_dispatch:
 
 env:
@@ -25,6 +25,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Nightly
+        run: |
+          rustup toolchain install nightly --component clippy
+          rustup override set nightly
 
       - name: Clippy
         run: cargo clippy -- -Dwarnings
