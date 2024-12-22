@@ -154,7 +154,7 @@ pub struct Chunk<'bytes> {
 
 derive::compressable_bytes!(Chunk: CompressionOptions);
 
-impl<'bytes> Chunk<'bytes> {
+impl Chunk<'_> {
     pub fn compress_into(&self, out: &mut Vec<u8>, options: &CompressionOptions) -> Result<()> {
         if self.is_compressed() {
             Err(Error::AlreadyCompressed)

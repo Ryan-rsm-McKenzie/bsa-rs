@@ -46,7 +46,7 @@ impl Header {
 
 derive::key!(Key: FileHash);
 
-impl<'bytes> Key<'bytes> {
+impl Key<'_> {
     #[must_use]
     fn hash_in_place(name: &mut BString) -> FileHash {
         tes3::hash_file_in_place(name)

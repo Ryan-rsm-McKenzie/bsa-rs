@@ -160,7 +160,7 @@ impl Bytes<'static> {
     }
 }
 
-impl<'bytes> Default for Bytes<'bytes> {
+impl Default for Bytes<'_> {
     fn default() -> Self {
         Self {
             inner: Owned(Box::default()),
@@ -275,7 +275,7 @@ impl CompressableBytes<'static> {
     }
 }
 
-impl<'bytes> Default for CompressableBytes<'bytes> {
+impl Default for CompressableBytes<'_> {
     fn default() -> Self {
         Self {
             inner: OwnedDecompressed(Box::default()),

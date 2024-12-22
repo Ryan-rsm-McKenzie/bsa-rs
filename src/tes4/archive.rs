@@ -291,7 +291,7 @@ struct SortedDirectory<'this, 'bytes> {
 
 derive::key!(Key: DirectoryHash);
 
-impl<'bytes> Key<'bytes> {
+impl Key<'_> {
     #[must_use]
     fn hash_in_place(name: &mut BString) -> DirectoryHash {
         tes4::hash_directory_in_place(name)

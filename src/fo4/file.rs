@@ -31,13 +31,13 @@ impl<'bytes> CapacityError<'bytes> {
     }
 }
 
-impl<'bytes> Debug for CapacityError<'bytes> {
+impl Debug for CapacityError<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         <Self as Display>::fmt(self, f)
     }
 }
 
-impl<'bytes> Display for CapacityError<'bytes> {
+impl Display for CapacityError<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -46,7 +46,7 @@ impl<'bytes> Display for CapacityError<'bytes> {
     }
 }
 
-impl<'bytes> error::Error for CapacityError<'bytes> {}
+impl error::Error for CapacityError<'_> {}
 
 /// See also [`FileReadOptions`](ReadOptions).
 #[derive(Debug, Default)]
@@ -1014,7 +1014,7 @@ pub struct File<'bytes> {
     pub header: Header,
 }
 
-impl<'bytes> Sealed for File<'bytes> {}
+impl Sealed for File<'_> {}
 
 type ReadResult<T> = T;
 derive::reader_with_options!((File: ReadOptions) => ReadResult);
@@ -1474,7 +1474,7 @@ impl<'bytes> Index<usize> for File<'bytes> {
     }
 }
 
-impl<'bytes> IndexMut<usize> for File<'bytes> {
+impl IndexMut<usize> for File<'_> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.chunks[index]
     }

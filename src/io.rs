@@ -141,7 +141,7 @@ pub(crate) struct CopiedSource<'bytes> {
     pos: usize,
 }
 
-impl<'bytes> CopiedSource<'bytes> {
+impl CopiedSource<'_> {
     #[must_use]
     fn make_bytes(&self, range: Range<usize>) -> Bytes<'static> {
         Bytes::from_owned(self.source[range].into())
