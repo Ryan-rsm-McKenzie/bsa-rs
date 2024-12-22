@@ -16,7 +16,7 @@ license = "0BSD"
 name = "ba2"
 readme = "README.md"
 repository = "https://github.com/Ryan-rsm-McKenzie/bsa-rs"
-version = "3.0.0"
+version = "3.0.1"
 
 [dependencies]
 bitflags = "2.4.1"
