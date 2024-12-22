@@ -77,13 +77,12 @@ pub enum CompressionResult {
 }
 
 /// A trait that enables reading from various sources, with configuration options.
-pub trait ReaderWithOptions<T>: Sealed {
+pub trait ReaderWithOptions<T>: Sealed + Sized {
     type Error;
-    type Item;
     type Options;
 
     /// Reads an instance of `Self::Item` from the given source, using the given options.
-    fn read(source: T, options: &Self::Options) -> core::result::Result<Self::Item, Self::Error>;
+    fn read(source: T, options: &Self::Options) -> core::result::Result<Self, Self::Error>;
 }
 
 pub use bstr::{BStr, BString, ByteSlice, ByteVec};

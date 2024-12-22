@@ -233,9 +233,8 @@ pub struct File<'bytes> {
     pub(crate) bytes: CompressableBytes<'bytes>,
 }
 
-type ReadResult<T> = T;
 derive::compressable_bytes!(File: CompressionOptions);
-derive::reader_with_options!((File: ReadOptions) => ReadResult);
+derive::reader_with_options!(File: ReadOptions);
 
 impl<'bytes> File<'bytes> {
     pub fn compress_into(&self, out: &mut Vec<u8>, options: &CompressionOptions) -> Result<()> {
@@ -309,7 +308,7 @@ impl<'bytes> File<'bytes> {
     }
 
     #[allow(clippy::trivially_copy_pass_by_ref)]
-    fn do_read<In>(stream: &mut In, options: &ReadOptions) -> Result<ReadResult<Self>>
+    fn do_read<In>(stream: &mut In, options: &ReadOptions) -> Result<Self>
     where
         In: ?Sized + Source<'bytes>,
     {

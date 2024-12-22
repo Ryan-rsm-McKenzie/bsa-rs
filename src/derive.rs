@@ -45,16 +45,12 @@ macro_rules! reader {
 pub(crate) use reader;
 
 macro_rules! reader_with_options {
-    (($this:ident: $options:ident) => $result:ident) => {
+    ($this:ident: $options:ident) => {
         impl<'bytes> crate::ReaderWithOptions<crate::Borrowed<'bytes>> for $this<'bytes> {
             type Error = Error;
-            type Item = $result<$this<'bytes>>;
             type Options = $options;
 
-            fn read(
-                source: crate::Borrowed<'bytes>,
-                options: &Self::Options,
-            ) -> Result<Self::Item> {
+            fn read(source: crate::Borrowed<'bytes>, options: &Self::Options) -> Result<Self> {
                 let mut source = crate::io::BorrowedSource::from(source.0);
                 Self::do_read(&mut source, options)
             }
@@ -62,10 +58,9 @@ macro_rules! reader_with_options {
 
         impl<'bytes> crate::ReaderWithOptions<crate::Copied<'bytes>> for $this<'static> {
             type Error = Error;
-            type Item = $result<$this<'static>>;
             type Options = $options;
 
-            fn read(source: crate::Copied<'bytes>, options: &Self::Options) -> Result<Self::Item> {
+            fn read(source: crate::Copied<'bytes>, options: &Self::Options) -> Result<Self> {
                 let mut source = crate::io::CopiedSource::from(source.0);
                 Self::do_read(&mut source, options)
             }
@@ -73,10 +68,9 @@ macro_rules! reader_with_options {
 
         impl crate::ReaderWithOptions<&::std::fs::File> for $this<'static> {
             type Error = Error;
-            type Item = $result<$this<'static>>;
             type Options = $options;
 
-            fn read(source: &::std::fs::File, options: &Self::Options) -> Result<Self::Item> {
+            fn read(source: &::std::fs::File, options: &Self::Options) -> Result<Self> {
                 let mut source = crate::io::MappedSource::try_from(source)?;
                 Self::do_read(&mut source, options)
             }
@@ -84,10 +78,9 @@ macro_rules! reader_with_options {
 
         impl crate::ReaderWithOptions<&::std::path::Path> for $this<'static> {
             type Error = Error;
-            type Item = $result<$this<'static>>;
             type Options = $options;
 
-            fn read(source: &::std::path::Path, options: &Self::Options) -> Result<Self::Item> {
+            fn read(source: &::std::path::Path, options: &Self::Options) -> Result<Self> {
                 let fd = ::std::fs::File::open(source)?;
                 Self::read(&fd, options)
             }

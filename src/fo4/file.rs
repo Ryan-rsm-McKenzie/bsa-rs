@@ -1016,8 +1016,7 @@ pub struct File<'bytes> {
 
 impl Sealed for File<'_> {}
 
-type ReadResult<T> = T;
-derive::reader_with_options!((File: ReadOptions) => ReadResult);
+derive::reader_with_options!(File: ReadOptions);
 
 impl<'bytes> File<'bytes> {
     #[must_use]
