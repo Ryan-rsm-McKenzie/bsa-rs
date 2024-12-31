@@ -384,7 +384,7 @@ impl<'bytes> Archive<'bytes> {
         // let mut file_entries_offset = offsets.file_entries + header.file_names_len;
         let mut file_entries_offset = u32::try_from(offsets.file_entries)?
             .checked_add(header.file_names_len)
-            .ok_or(Error::IntegralOverflow)?;
+            .ok_or(Error::IntegralOverflow("overflow while computing the initial file entries offset ptr"))?;
         for directory in &directories {
             Self::write_directory_entry(
                 &mut sink,
@@ -573,7 +573,7 @@ impl<'bytes> Archive<'bytes> {
             // file_entries_offset += key.name().len() + 2;
             *file_entries_offset = file_entries_offset
                 .checked_add((key.name().len() + 2).try_into()?)
-                .ok_or(Error::IntegralOverflow)?;
+                .ok_or(Error::IntegralOverflow("overflow on the file entries offset ptr while appending directory strings"))?;
         }
 
         // file_entries_offset += directory.len() * constants::FILE_ENTRY_SIZE;
@@ -582,10 +582,10 @@ impl<'bytes> Archive<'bytes> {
                 directory
                     .len()
                     .checked_mul(constants::FILE_ENTRY_SIZE)
-                    .ok_or(Error::IntegralOverflow)?
+                    .ok_or(Error::IntegralOverflow("overflow while multiplying the number of files in a directory by the size of their record"))?
                     .try_into()?,
             )
-            .ok_or(Error::IntegralOverflow)?;
+            .ok_or(Error::IntegralOverflow("overflow on the file entries offset ptr while appending file entry records"))?;
 
         Ok(())
     }
@@ -651,7 +651,7 @@ impl<'bytes> Archive<'bytes> {
         // file_data_offset += size;
         *file_data_offset = file_data_offset
             .checked_add(size)
-            .ok_or(Error::IntegralOverflow)?;
+            .ok_or(Error::IntegralOverflow("overflow on the file data offset ptr while appending the file data"))?;
 
         Ok(())
     }
