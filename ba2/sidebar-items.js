@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CompressionResult","FileFormat"],"fn":["guess_format"],"mod":["fo4","prelude","tes3","tes4"],"struct":["BStr","BString","Borrowed","Copied"],"trait":["ByteSlice","ByteVec","CompressableFrom","Reader","ReaderWithOptions"]};

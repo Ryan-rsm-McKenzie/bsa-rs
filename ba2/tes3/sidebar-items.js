@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"fn":["hash_file","hash_file_in_place"],"struct":["Archive","ArchiveKey","File","FileHash","Hash"],"type":["Result"]};
