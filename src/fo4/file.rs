@@ -83,12 +83,18 @@ impl ReadOptionsBuilder {
         self
     }
 
+    /// This setting corresponds to the _Single Mip Chunk Area_ setting from _Archive2.exe_.
+    /// This is __not__ the same as the size of the texture itself.
+    /// This is a heuristic for splitting mips into [chunks](Chunk).
+    /// Using anything other than the default setting is almost always a mistake.
+    /// Do not change this setting unless you know what you're doing.
     #[must_use]
     pub fn mip_chunk_height(mut self, mip_chunk_height: usize) -> Self {
         self.0.mip_chunk_height = mip_chunk_height;
         self
     }
 
+    /// See also [`mip_chunk_height`](Self::mip_chunk_height).
     #[must_use]
     pub fn mip_chunk_width(mut self, mip_chunk_width: usize) -> Self {
         self.0.mip_chunk_width = mip_chunk_width;
